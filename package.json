@@ -1,0 +1,27 @@
+{
+  "name": "orgo-monopoly",
+  "version": "1.0.0",
+  "description": "Monopoly clone for HL Chemistry, based on the organic chemistry unit.",
+  "main": "index.js",
+  "scripts": {
+    "tsc-watch": "tsc -w",
+    "start-server": "cd ./server && npm start",
+    "start-web": "cd ./web && npm start",
+    "start": "concurrently 'npm run start-server' 'npm run start-web'"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/plin0009/orgo-monopoly.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/plin0009/orgo-monopoly/issues"
+  },
+  "homepage": "https://github.com/plin0009/orgo-monopoly#readme",
+  "devDependencies": {
+    "concurrently": "^5.2.0",
+    "typescript": "^3.9.5"
+  }
+}
