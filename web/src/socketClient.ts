@@ -6,6 +6,8 @@ import {
   Game,
   Player,
   GameError,
+  ChooseCharacterArgs,
+  Character,
 } from "../../types";
 
 import update from "immutability-helper";
@@ -41,6 +43,63 @@ export const subscribeToUpdates = ({ setGame, setMe }: Updates) => {
   socket.on("removePlayer", (id: string) => {
     setGame((g) => update(g, { players: { $unset: [id] } }));
   });
+
+  socket.on("choseCharacter", (character: Character, playerId: string) => {
+    setGame((g) => {
+      if (g === "loading" || g === "not found") {
+        return g;
+      }
+      const oldCharacter = g.players[playerId].character;
+
+      return update(g, {
+        characters: {
+          $unset: [oldCharacter!],
+          [character]: { $set: playerId },
+        },
+        characterOrder: {
+          $splice: [
+            [
+              g.characterOrder.indexOf(oldCharacter!),
+              oldCharacter === undefined ? 0 : 1,
+            ],
+          ],
+          $push: [character],
+        },
+        players: { [playerId]: { character: { $set: character } } },
+      });
+    });
+  });
+  socket.on("choseSpectate", (playerId: string) => {
+    setGame((g) => {
+      if (g === "loading" || g === "not found") {
+        return g;
+      }
+      const oldCharacter = g.players[playerId].character;
+      if (oldCharacter === undefined) {
+        return g;
+      }
+      return update(g, {
+        characters: { $unset: [oldCharacter] },
+        characterOrder: {
+          $splice: [[g.characterOrder.indexOf(oldCharacter), 1]],
+        },
+        players: { [playerId]: { $unset: ["character"] } },
+      });
+    });
+  });
+
+  socket.on("toggledReady", (playerId: string) => {
+    setGame((g) => {
+      if (g === "loading" || g === "not found") {
+        return g;
+      }
+      return update(g, {
+        players: {
+          [playerId]: { ready: { $set: !g.players[playerId].ready } },
+        },
+      });
+    });
+  });
 };
 
 export const createRoom = async () => {
@@ -55,4 +114,15 @@ export const joinRoom = ({ roomId }: JoinRoomArgs) => {
 
 export const changeName = ({ name }: ChangeNameArgs) => {
   socket.emit("changeName", { name });
+};
+
+export const chooseCharacter = ({ character }: ChooseCharacterArgs) => {
+  socket.emit("chooseCharacter", { character });
+};
+export const chooseSpectate = () => {
+  socket.emit("chooseSpectate");
+};
+
+export const toggleReady = () => {
+  socket.emit("toggleReady");
 };

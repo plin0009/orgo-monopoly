@@ -1,7 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { RouteComponentProps } from "react-router-dom";
-import { subscribeToUpdates, joinRoom, changeName } from "../socketClient";
+import {
+  subscribeToUpdates,
+  joinRoom,
+  changeName,
+  chooseCharacter,
+  chooseSpectate,
+  toggleReady,
+} from "../socketClient";
 import { Game, GameError } from "../../../types";
+import { characters } from "../constants";
 
 interface RoomPageParams {
   roomId: string;
@@ -29,9 +37,42 @@ const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
         <div>
           <h1>Welcome{me !== null ? `, ${game.players[me].name}!` : "!"}</h1>
           <h2>Players</h2>
-          {Object.keys(game.players).map((id) => (
-            <p>{game.players[id].name}</p>
+          {Object.keys(game.players).map((playerId) => (
+            <p key={playerId}>
+              {game.players[playerId].name} is{" "}
+              {game.players[playerId].character || "spectating"}
+            </p>
           ))}
+          <div>
+            <h2>Choose character</h2>
+            {characters.map((character) => (
+              <button
+                key={character}
+                onClick={() => {
+                  chooseCharacter({ character });
+                }}
+                disabled={game.characterOrder.includes(character)}
+              >
+                {character}
+              </button>
+            ))}
+            <button
+              onClick={() => {
+                chooseSpectate();
+              }}
+            >
+              Spectate
+            </button>
+          </div>
+          <div>
+            <button
+              onClick={() => {
+                toggleReady();
+              }}
+            >
+              Ready
+            </button>
+          </div>
         </div>
       )}
     </div>
