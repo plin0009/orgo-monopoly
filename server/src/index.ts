@@ -86,11 +86,14 @@ io.on("connection", (socket) => {
     game.players[socket.id] = { name, ready: false };
 
     socket.emit("joinedRoom", game);
-    socket.to(roomId).emit("newPlayer", socket.id, { name });
+    socket.to(roomId).emit("newPlayer", { name }, socket.id);
   });
 
   socket.on("changeName", ({ name }: ChangeNameArgs) => {
     console.log(`${socket.id} is trying to change name to ${name}`);
+    const game = games[currentRoomId!];
+    game.players[socket.id].name = name;
+    io.in(currentRoomId!).emit("changedName", name, socket.id);
   });
 
   socket.on("chooseCharacter", ({ character }: ChooseCharacterArgs) => {

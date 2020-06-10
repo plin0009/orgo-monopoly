@@ -39,11 +39,17 @@ export const subscribeToUpdates = ({ setGame, setMe }: Updates) => {
     console.log(game);
     setGame(() => game);
   });
-  socket.on("newPlayer", (id: string, player: Player) => {
-    setGame((g) => update(g, { players: { [id]: { $set: player } } }));
+  socket.on("newPlayer", (player: Player, playerId: string) => {
+    setGame((g) => update(g, { players: { [playerId]: { $set: player } } }));
   });
-  socket.on("removePlayer", (id: string) => {
-    setGame((g) => update(g, { players: { $unset: [id] } }));
+  socket.on("removePlayer", (playerId: string) => {
+    setGame((g) => update(g, { players: { $unset: [playerId] } }));
+  });
+
+  socket.on("changedName", (name: string, playerId: string) => {
+    setGame((g) =>
+      update(g, { players: { [playerId]: { name: { $set: name } } } })
+    );
   });
 
   socket.on("choseCharacter", (character: Character, playerId: string) => {

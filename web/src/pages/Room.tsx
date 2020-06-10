@@ -21,7 +21,9 @@ const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
   const [game, setGame] = useState<Game | GameError>("loading");
   const [me, setMe] = useState<string | null>(null);
 
-  // const [nameInput, setNameInput] = useState<string>("");
+  const [changingName, setChangingName] = useState<boolean>(false);
+
+  const [nameInput, setNameInput] = useState<string>("");
 
   useEffect(() => {
     subscribeToUpdates({ setGame, setMe });
@@ -37,11 +39,35 @@ const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
       ) : game.state === null ? (
         <div>
           <h1>Welcome{me !== null ? `, ${game.players[me].name}!` : "!"}</h1>
+          <button
+            onClick={() => {
+              setChangingName((c) => !c);
+            }}
+          >
+            Edit name
+          </button>
+          {changingName ? (
+            <div>
+              <input
+                type="text"
+                value={nameInput}
+                onChange={(e) => setNameInput(e.target.value)}
+              />
+              <button
+                onClick={() => {
+                  changeName({ name: nameInput });
+                }}
+              >
+                Change name
+              </button>
+            </div>
+          ) : null}
           <h2>Players</h2>
           {Object.keys(game.players).map((playerId) => (
             <p key={playerId}>
               {game.players[playerId].name} is{" "}
               {game.players[playerId].character || "spectating"}
+              {game.players[playerId].ready ? " and ready" : " and not ready"}
             </p>
           ))}
           <div>
