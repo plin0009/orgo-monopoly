@@ -7,8 +7,9 @@ import {
   chooseCharacter,
   chooseSpectate,
   toggleReady,
+  rollDice,
 } from "../socketClient";
-import { Game, GameError } from "../../../types";
+import { Game, GameError, MovingTurnState } from "../../../types";
 import { characters } from "../constants";
 
 interface RoomPageParams {
@@ -33,7 +34,7 @@ const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
         <h1>Loading</h1>
       ) : game === "not found" ? (
         <h1>Room not found</h1>
-      ) : (
+      ) : game.state === null ? (
         <div>
           <h1>Welcome{me !== null ? `, ${game.players[me].name}!` : "!"}</h1>
           <h2>Players</h2>
@@ -51,7 +52,7 @@ const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
                 onClick={() => {
                   chooseCharacter({ character });
                 }}
-                disabled={game.characterOrder.includes(character)}
+                disabled={character in game.characters}
               >
                 {character}
               </button>
@@ -74,7 +75,34 @@ const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
             </button>
           </div>
         </div>
-      )}
+      ) : game.state.turnState.activity === "starting turn" ? (
+        <div>
+          <h1>
+            It's {game.players[game.state.playerOrder[game.state.turn]].name}
+            's turn
+          </h1>
+          {me === game.state.playerOrder[game.state.turn] ? (
+            <button
+              onClick={() => {
+                rollDice();
+              }}
+            >
+              Roll
+            </button>
+          ) : null}
+        </div>
+      ) : game.state.turnState.activity === "rolling dice" ? (
+        <div>
+          <h1>Rolling dice</h1>
+        </div>
+      ) : game.state.turnState.activity === "moving" ? (
+        <div>
+          <h1>
+            {`${game.players[game.state.playerOrder[game.state.turn]].name}
+            rolled a ${(game.state.turnState as MovingTurnState).rolled}`}
+          </h1>
+        </div>
+      ) : null}
     </div>
   );
 };

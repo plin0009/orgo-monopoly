@@ -1,3 +1,4 @@
+import { setTimeout } from "timers";
 import express from "express";
 import http from "http";
 import cors from "cors";
@@ -7,9 +8,15 @@ import {
   JoinRoomArgs,
   ChangeNameArgs,
   ChooseCharacterArgs,
+  GamePlayer,
+  RollingDiceTurnState,
+  Board,
+  StartTurnState,
+  MovingTurnState,
 } from "../../types";
 
 import { generateRoomId, generatePlayerName } from "./generator";
+import { startingBoard, startingCurrency, timers } from "./constants";
 
 const port = process.env.PORT || 8000;
 
@@ -18,6 +25,18 @@ const server = http.createServer(app);
 const io = socket(server);
 
 const games: Record<string, Game> = {};
+
+const allTimers: NodeJS.Timeout[] = [];
+
+const setAndStoreTimeout = (callback: (...args: any[]) => void, ms: number) => {
+  const timer: NodeJS.Timeout = setTimeout(callback, ms);
+  allTimers.push(timer);
+  return allTimers.length - 1;
+};
+
+const clearStoredTimeout = (id: number) => {
+  clearTimeout(allTimers[id]);
+};
 
 app.use(cors());
 app.post("/create/", (_, res) => {
@@ -28,8 +47,9 @@ app.post("/create/", (_, res) => {
   games[newRoomId] = {
     players: {},
     characters: {},
-    characterOrder: [],
+    activePlayersList: [],
     state: null,
+    timer: null,
   };
   console.log(`created room ${newRoomId}`);
   res.json({ roomId: newRoomId });
@@ -44,23 +64,19 @@ io.on("connection", (socket) => {
       socket.emit("errorNoRoom");
       return;
     }
-    if (currentRoomId === roomId) {
-      console.log("already here!");
-      return;
-    }
     console.log(`${socket.id} joined ${roomId}`);
     socket.join(roomId);
     currentRoomId = roomId;
     const game = games[roomId];
-    const playerIDs = Object.keys(game.players);
+    const playerIds = Object.keys(game.players);
 
     let name = generatePlayerName();
     let nameConflict = true;
     while (nameConflict) {
       nameConflict = false;
 
-      for (let i = 0; i < playerIDs.length; i++) {
-        if (name === game.players[playerIDs[i]].name) {
+      for (let i = 0; i < playerIds.length; i++) {
+        if (name === game.players[playerIds[i]].name) {
           nameConflict = true;
           name = generatePlayerName();
           break;
@@ -78,10 +94,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("chooseCharacter", ({ character }: ChooseCharacterArgs) => {
-    if (currentRoomId === null) {
-      return;
-    }
-    const game = games[currentRoomId];
+    const game = games[currentRoomId!];
 
     if (game.characters[character]) {
       // emit error: character already taken
@@ -89,51 +102,144 @@ io.on("connection", (socket) => {
     }
     const oldCharacter = game.players[socket.id].character;
     if (oldCharacter !== undefined) {
-      game.characterOrder.splice(game.characterOrder.indexOf(oldCharacter, 1));
       delete game.characters[oldCharacter];
+    } else {
+      game.activePlayersList.push(socket.id);
     }
 
-    game.characterOrder.push(character);
     game.characters[character] = socket.id;
     game.players[socket.id].character = character;
 
-    io.in(currentRoomId).emit("choseCharacter", character, socket.id);
+    io.in(currentRoomId!).emit("choseCharacter", character, socket.id);
   });
 
   socket.on("chooseSpectate", () => {
-    if (currentRoomId === null) {
-      return;
-    }
-    const game = games[currentRoomId];
+    const game = games[currentRoomId!];
 
     const oldCharacter = game.players[socket.id].character;
     if (oldCharacter !== undefined) {
-      game.characterOrder.splice(game.characterOrder.indexOf(oldCharacter, 1));
+      game.activePlayersList.splice(
+        game.activePlayersList.indexOf(socket.id, 1)
+      );
       delete game.characters[oldCharacter];
     }
 
-    io.in(currentRoomId).emit("choseSpectate", socket.id);
+    io.in(currentRoomId!).emit("choseSpectate", socket.id);
   });
 
   socket.on("toggleReady", () => {
-    if (currentRoomId === null) {
-      return;
-    }
-    const game = games[currentRoomId];
+    const game = games[currentRoomId!];
     game.players[socket.id].ready = !game.players[socket.id].ready;
-    io.in(currentRoomId).emit("toggledReady", socket.id);
+    io.in(currentRoomId!).emit("toggledReady", socket.id);
+
+    const playerIds = Object.keys(game.players);
+    for (let i = 0; i < playerIds.length; i++) {
+      if (!game.players[playerIds[i]].ready) {
+        // if was about to start game
+        if (game.timer !== null) {
+          clearStoredTimeout(game.timer);
+          game.timer = null;
+        }
+        return;
+      }
+    }
+
+    console.log(`about to start game ${currentRoomId}`);
+    io.in(currentRoomId!).emit("aboutToStartGame");
+    game.timer = setAndStoreTimeout(startGame, 5000);
   });
 
-  socket.on("startGame", () => {
-    if (currentRoomId === null) {
+  const startGame = () => {
+    const game = games[currentRoomId!];
+
+    const gamePlayers: Record<string, GamePlayer> = {};
+    const playerIds = Object.keys(game.players);
+
+    for (let i = 0; i < playerIds.length; i++) {
+      const playerId = playerIds[i];
+      gamePlayers[playerId] = {
+        currency: startingCurrency,
+        properties: [],
+        currentTile: 0,
+      };
+    }
+
+    console.log(`starting game ${currentRoomId}`);
+
+    startTurn({
+      playerOrder: [...game.activePlayersList].sort(() => 0.5 - Math.random()),
+      board: startingBoard,
+      players: gamePlayers,
+    });
+
+    io.in(currentRoomId!).emit("startedGame", game.state);
+  };
+
+  const startTurn = (
+    initialGameState: {
+      playerOrder: string[];
+      board: Board;
+      players: Record<string, GamePlayer>;
+    } | null
+  ) => {
+    const game = games[currentRoomId!];
+    const state = game.state;
+
+    let turn;
+
+    if (state === null) {
+      turn = 0;
+    } else {
+      const oldTurn = state.turn;
+
+      turn = oldTurn + 1;
+      if (turn === state.playerOrder.length) {
+        turn = 0;
+      }
+    }
+
+    const timer = setAndStoreTimeout(act, timers.startTurn);
+
+    console.log(`starting turn`);
+
+    game.state = {
+      ...(initialGameState || state)!,
+      turn,
+      turnState: { timer, activity: "starting turn" } as StartTurnState,
+      board: startingBoard,
+    };
+    console.log(JSON.stringify(game.state));
+  };
+
+  const act = () => {
+    console.log(`player was too slow`);
+  };
+
+  socket.on("rollDice", () => {
+    const game = games[currentRoomId!];
+    const gameState = game.state!;
+    if (gameState.playerOrder[gameState.turn] !== socket.id) {
+      // not your turn
       return;
     }
-    const game = games[currentRoomId];
-    console.log(game.characterOrder);
-    console.log(JSON.stringify(game.characters));
-    console.log(JSON.stringify(game.players));
+    clearStoredTimeout(gameState.turnState.timer);
 
-    io.in(currentRoomId).emit("startedGame");
+    const diceRoll = Math.ceil(Math.random() * 6);
+    const timer = setAndStoreTimeout(() => {
+      game.state!.turnState = {
+        timer,
+        activity: "moving",
+        rolled: diceRoll,
+        showTimer: false,
+      } as MovingTurnState;
+
+      io.in(currentRoomId!).emit("rolledDice", game.state!.turnState); // newTurnState event instead?
+    }, timers.rollingDice);
+    game.state!.turnState = {
+      timer,
+      showTimer: false,
+    } as RollingDiceTurnState;
+    io.in(currentRoomId!).emit("rollingDice", game.state!.turnState); // newTurnState event instead?
   });
 
   socket.on("disconnect", () => {

@@ -8,6 +8,8 @@ import {
   GameError,
   ChooseCharacterArgs,
   Character,
+  GameState,
+  TurnState,
 } from "../../types";
 
 import update from "immutability-helper";
@@ -34,7 +36,7 @@ export const subscribeToUpdates = ({ setGame, setMe }: Updates) => {
   });
   socket.on("joinedRoom", (game: Game) => {
     console.log("joined room");
-    console.log(JSON.stringify(game));
+    console.log(game);
     setGame(() => game);
   });
   socket.on("newPlayer", (id: string, player: Player) => {
@@ -56,14 +58,8 @@ export const subscribeToUpdates = ({ setGame, setMe }: Updates) => {
           $unset: [oldCharacter!],
           [character]: { $set: playerId },
         },
-        characterOrder: {
-          $splice: [
-            [
-              g.characterOrder.indexOf(oldCharacter!),
-              oldCharacter === undefined ? 0 : 1,
-            ],
-          ],
-          $push: [character],
+        activePlayersList: {
+          $push: oldCharacter === undefined ? [playerId] : [],
         },
         players: { [playerId]: { character: { $set: character } } },
       });
@@ -80,8 +76,8 @@ export const subscribeToUpdates = ({ setGame, setMe }: Updates) => {
       }
       return update(g, {
         characters: { $unset: [oldCharacter] },
-        characterOrder: {
-          $splice: [[g.characterOrder.indexOf(oldCharacter), 1]],
+        activePlayersList: {
+          $splice: [[g.activePlayersList.indexOf(playerId), 1]],
         },
         players: { [playerId]: { $unset: ["character"] } },
       });
@@ -99,6 +95,20 @@ export const subscribeToUpdates = ({ setGame, setMe }: Updates) => {
         },
       });
     });
+  });
+
+  socket.on("startedGame", (gameState: GameState) => {
+    setGame((g) => {
+      return update(g, { state: { $set: gameState } });
+    });
+  });
+
+  socket.on("rollingDice", (turnState: TurnState) => {
+    setGame((g) => update(g, { state: { turnState: { $set: turnState } } }));
+  });
+
+  socket.on("rolledDice", (turnState: TurnState) => {
+    setGame((g) => update(g, { state: { turnState: { $set: turnState } } }));
   });
 };
 
@@ -125,4 +135,8 @@ export const chooseSpectate = () => {
 
 export const toggleReady = () => {
   socket.emit("toggleReady");
+};
+
+export const rollDice = () => {
+  socket.emit("rollDice");
 };
