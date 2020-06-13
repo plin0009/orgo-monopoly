@@ -6,7 +6,7 @@ import {
   getMarkerPoint,
   characterSize,
 } from "../boardDesign";
-import { Character } from "../../../types";
+import { Character } from "../types";
 import { characterColors } from "../constants";
 
 interface BoardProps {
