@@ -16,7 +16,7 @@ export interface Player {
   ready: boolean;
 }
 export type Players = Record<string, Player>;
-export type Character = "a" | "b" | "c" | "d" | "e";
+export type Character = "Alfred" | "Benny" | "Hal" | "Nat";
 export type Characters = {
   [P in Character]?: string;
 };
@@ -35,6 +35,9 @@ export interface GameState {
   turnState: TurnState;
   players: Record<string, GamePlayer>;
   board: Board;
+  propertyQuestionDecks: QuestionCollection[];
+  utilityQuestionDecks: QuestionCollection[];
+  auctionQuestionDeck: QuestionCollection;
 }
 
 export type Turn = number;
@@ -44,12 +47,32 @@ export type TurnStateActivity =
   | "staying in jail"
   | "rolling dice"
   | "moving"
-  | "deciding"
-  | "buying property";
+  | "acting"
+  | "answering question"
+  | "auctioning";
+
+export type Action =
+  | "buy property"
+  | "buy utility"
+  | "chance"
+  | "jail"
+  | "auction"
+  | "nothing";
+
+export type Reaction = {
+  "buy property": "accept" | "decline";
+  "buy utility": "accept" | "decline";
+  chance: null;
+  jail: "stay" | "half" | "full";
+  auction: "accept" | "decline";
+  nothing: null;
+};
 
 export interface TurnState {
   activity: TurnStateActivity;
   timer: number;
+  action?: Action;
+  showTimer?: boolean;
 }
 export interface StartTurnState extends TurnState {
   activity: "starting turn";
@@ -67,32 +90,92 @@ export interface MovingTurnState extends TurnState {
   rolled: number;
   showTimer: false;
 }
-export interface DecidingTurnState extends TurnState {
-  activity: "deciding";
-  action: string;
+export interface ActingTurnState extends TurnState {
+  activity: "acting";
+  action: Action;
 }
-export interface BuyPropertyState extends TurnState {
-  activity: "buying property";
+
+export interface ActionData {
+  "buy property": {
+    buyPrice: number;
+  };
+  "buy utility": { buyPrice: number };
+  chance: null;
+  jail: {
+    fullBail: number;
+    halfBail: number;
+  };
+  auction: { bounty: number };
+  nothing: null;
+}
+
+export type ValueOf<
+  T,
+  U = {
+    [K in keyof T]: T[K];
+  }
+> = U[keyof U];
+
+export interface AnsweringQuestionTurnState extends TurnState {
+  activity: "answering question";
   question: Question;
 }
 
 export interface GamePlayer {
   currency: number;
   properties: number[];
+  utilities: number[];
   currentTile: number;
+  jailed: number;
 }
 
 export type Board = Tile[];
 
 export interface Tile {
   name: string;
+  type: TileType;
+  action: Action;
 }
 
+export type TileType =
+  | "property"
+  | "utility"
+  | "chance"
+  | "jail"
+  | "auction"
+  | "go";
+
 export interface Property extends Tile {
+  type: "property";
+  action: "buy property";
   baseValue: number;
   collection: number;
   upgrade: number;
   ownerId?: string;
+}
+
+export interface Utility extends Tile {
+  type: "utility";
+  action: "buy utility";
+  collection: number;
+  ownerId?: string;
+}
+
+export interface Chance extends Tile {
+  type: "chance";
+  action: "chance";
+}
+export interface Jail extends Tile {
+  type: "jail";
+  action: "jail";
+}
+export interface Auction extends Tile {
+  type: "auction";
+  action: "auction";
+}
+export interface Go extends Tile {
+  type: "go";
+  action: "nothing";
 }
 
 export type QuestionType = "multiple choice" | "input";
@@ -114,5 +197,10 @@ export interface InputQuestion extends Question {
 }
 
 export type QuestionCollection = Question[];
+
+export type Spinner = {
+  name: string;
+  maxValue: number;
+}[];
 
 export type GameError = "loading" | "not found";

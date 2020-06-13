@@ -1,57 +1,120 @@
 import {
   Board,
-  Tile,
+  Go,
+  Chance,
+  Jail,
+  Auction,
   Property,
   Answer,
   MultipleChoiceQuestion,
   QuestionCollection,
+  Utility,
+  Spinner,
 } from "../../types";
 
 const collectionToBaseValue = (collection: number) => {
-  return 100 + collection * 50;
+  return currencies.propertyBase + collection * currencies.propertyBonus;
 };
+
+const toNearestFive = (value: number) => Math.ceil(value / 5) * 5;
+
+const propertyValue = ({ baseValue, upgrade }: Property) => {
+  let multiplier = 1;
+  switch (upgrade) {
+    case 2:
+      multiplier += 0.7;
+    case 1:
+      multiplier += 0.5;
+  }
+  return baseValue * multiplier;
+};
+
+export const propertyBuyPrice = (p: Property) => p.baseValue;
+export const propertyUpgradePrice = (p: Property) => {
+  switch (p.upgrade) {
+    case 0:
+      return p.baseValue * 0.5;
+    case 1:
+      return p.baseValue * 0.7;
+  }
+  return 0;
+};
+export const propertySellValue = (p: Property) =>
+  valueToSellPrice(propertyValue(p));
+export const propertyRentValue = (p: Property) =>
+  valueToRentPrice(propertyValue(p));
+
+export const utilityBuyPrice = () => utilityBaseValue;
+export const utilitySellValue = () => valueToSellPrice(utilityBaseValue);
+export const utilityRentValue = (count: number) =>
+  valueToRentPrice(utilityBaseValue + count * utilityBonus);
+
+const valueToSellPrice = (value: number) => toNearestFive(value * 0.7);
+const valueToRentPrice = (value: number) => toNearestFive(value * 0.5);
 
 const property = (name: string, collection: number) =>
   ({
+    type: "property",
+    action: "buy property",
     name,
     collection,
     baseValue: collectionToBaseValue(collection),
     upgrade: 0,
   } as Property);
 
-const go = () => ({ name: "GO" } as Tile);
-const utility = (name: string) => ({ name } as Tile);
-const chance = () => ({ asdasd: 1, name: "CAS" } as Tile);
-const jail = () => ({ name: "EE" } as Tile);
-const auction = () => ({ name: "TOK" } as Tile);
+const go = () => ({ type: "go", action: "nothing", name: "GO" } as Go);
+const utility = (name: string, collection: number) =>
+  ({ type: "utility", action: "buy utility", name, collection } as Utility);
+const chance = () =>
+  ({ type: "chance", action: "chance", name: "CAS" } as Chance);
+const jail = () => ({ type: "jail", action: "jail", name: "EE" } as Jail);
+const auction = () =>
+  ({ type: "auction", action: "auction", name: "TOK" } as Auction);
 
 export const startingCurrency = 1000;
+export const currencies = {
+  starting: 1000,
+  passGo: 200,
+  utilityBase: 200,
+  utilityBonus: 50,
+  propertyBase: 100,
+  propertyBonus: 50,
+  fullBail: 200,
+  halfBail: 100,
+  auctionBounty: 100,
+};
+const utilityBaseValue = 200;
+const utilityBonus = 50;
 
 export const timers = {
   startTurn: 10000,
   rollingDice: 3000,
-  rolledDice: 5000,
-  deciding: 15000,
+  moving: 5000,
+  acting: 15000,
   answeringQuestion: (collection: number) => 30000 + collection * 5000,
   jailed: 5000,
   auctioning: 45000,
   chance: 10000,
+  nothing: 5000,
 };
+
+export const fullJailTerm = 6;
+export const halfJailTerm = 3;
 
 export const startingBoard: Board = [
   go(),
   property("Alkane Avenue", 0),
   property("Benzene Boulevard", 0),
   property("Carboxylic Crescent", 0),
-  utility("Utility 1"),
+  utility("Lab Safety", 0),
   property("Thermoset Trail", 1),
   property("Plastic Pines", 1),
   property("Monomer Meadow", 1),
   chance(),
   property("Trans Tunnel", 2),
-  property("E-Z Exit", 2),
+  property("E/Z Exit", 2),
   property("Cis Crossing", 2),
-  utility("Utility 2"),
+  utility("Lab Equipment", 1),
   property("Polarimeter Parkway", 3),
   property("Enantiomer Express", 3),
   property("Chiral Center", 3),
@@ -59,7 +122,7 @@ export const startingBoard: Board = [
   property("Reaction Ranch", 4),
   property("Racemic Route", 4),
   property("Radical Road", 4),
-  utility("Utility 3"),
+  utility("IA Rules", 2),
   property("Nucleophilic North", 5),
   property("Electrophilic East", 5),
   property("Substitution South", 5),
@@ -67,7 +130,7 @@ export const startingBoard: Board = [
   property("Name Lane", 6),
   property("Line Lane", 6),
   property("Chain Lane", 6),
-  utility("Utility 4"),
+  utility("Mr. Israel's Rules", 3),
   property("Molecule Manor", 7),
   property("Compound Castle", 7),
   property("Pathway Palace", 7),
@@ -79,7 +142,7 @@ const multipleChoiceQuestion = (
   wrong: Answer[]
 ) => ({ questionText, correct, wrong } as MultipleChoiceQuestion);
 
-export const questions: QuestionCollection[] = [
+export const propertyQuestions: QuestionCollection[] = [
   [
     multipleChoiceQuestion(
       "How many covalent bonds can a carbon atom form?",
@@ -88,34 +151,203 @@ export const questions: QuestionCollection[] = [
     ),
     multipleChoiceQuestion(
       "What is the name for the delocalisation of electrons within a structure?",
-      "Resonance",
-      ["Resonant", "Revolvement", "Aromatic"]
+      "resonance",
+      ["resonant", "revolvement", "rromatic"]
     ),
     multipleChoiceQuestion(
       "Which type of bond is a saturated bond?",
-      "Alkane",
-      ["Alkene", "Alkyne", "Aliphatic"]
+      "alkane",
+      ["alkene", "alkyne", "aliphatic"]
     ),
     multipleChoiceQuestion(
       "The empirical and molecular formulas of ethane are the same.",
-      "False",
-      ["True"]
+      "false",
+      ["true"]
     ),
     multipleChoiceQuestion(
       "Which carbon has a nitrile bond in most compounds?",
       "carbon 1",
       ["terminal carbon", "any carbon", "middle carbon"]
     ),
+    multipleChoiceQuestion(
+      "How is nitrogen bonded in an amine?",
+      "single bonds only",
+      ["single and double bonds", "double bonds only", "triple bonds only"]
+    ),
+    multipleChoiceQuestion(
+      "There are no other neighbouring functional groups to amines.",
+      "true",
+      ["false"]
+    ),
+    multipleChoiceQuestion(
+      "The carbon from the amide functional group must not be in the parent chain.",
+      "false",
+      ["true"]
+    ),
+    multipleChoiceQuestion(
+      "Which of the following homologus series cannot have a molecular formula containing only two carbon atoms?",
+      "ketone",
+      ["aldehyde", "carboxylic acid, ester"]
+    ),
+    multipleChoiceQuestion(
+      "What is the parent chain suffix for the halogeno group?",
+      "halide",
+      ["ane", "ether", "hydroxy"]
+    ),
+    multipleChoiceQuestion(
+      "What is the parent chain suffix for the alkyl group?",
+      "ane",
+      ["benzene", "ene", "yne"]
+    ),
+    multipleChoiceQuestion(
+      "What is the parent chain suffix for the phenyl group?",
+      "benzene",
+      ["phenyl", "ene", "yne"]
+    ),
+    multipleChoiceQuestion(
+      "What is the parent chain suffix for the ether group?",
+      "ether",
+      ["ene", "yne", "amine"]
+    ),
+    multipleChoiceQuestion(
+      "What is the parent chain suffix for the alkenyl group?",
+      "ene",
+      ["ane", "yne", "benzene"]
+    ),
+    multipleChoiceQuestion(
+      "What is the parent chain suffix for the amine group?",
+      "amine",
+      ["amino", "cyano", "amide"]
+    ),
+    multipleChoiceQuestion(
+      "What is the parent chain suffix for the hydroxyl group?",
+      "ol",
+      ["hydroxy", "one", "ene"]
+    ),
+    multipleChoiceQuestion(
+      "What is the parent chain suffix for ketones?",
+      "one",
+      ["al", "on", "onyl"]
+    ),
+    multipleChoiceQuestion(
+      "What is the parent chain suffix for aldehydes?",
+      "al",
+      ["one", "on", "yde"]
+    ),
+    multipleChoiceQuestion(
+      "What is the parent chain suffix for nitriles?",
+      "nitrile",
+      ["cyano", "amino", "amide"]
+    ),
+    multipleChoiceQuestion(
+      "What is the parent chain suffix for amides?",
+      "amide",
+      ["ide", "mide", "amino"]
+    ),
+    multipleChoiceQuestion(
+      "What is the parent chain suffix for esters?",
+      "oate",
+      ["ester", "ster", "ate"]
+    ),
+    multipleChoiceQuestion(
+      "What is the parent chain suffix for the carboxyl group?",
+      "oic acid",
+      ["oate", "xyl", "oxyl"]
+    ),
+    multipleChoiceQuestion(
+      "Only ketones are part of the carbonyl functional group.",
+      "false",
+      ["true"]
+    ),
+    multipleChoiceQuestion("What is the side group name for alkane?", "alkyl", [
+      "alkane",
+      "alk",
+      "al",
+    ]),
+    multipleChoiceQuestion(
+      "What is the side group name for benzene?",
+      "phenyl",
+      ["benzene", "cyclo", "ben"]
+    ),
+    multipleChoiceQuestion("What is the side group name for ether?", "alkoxy", [
+      "ether",
+      "alko",
+      "oxy",
+    ]),
+    multipleChoiceQuestion(
+      "What is the side group name for alcohol?",
+      "hydroxy",
+      ["hydroxyl", "alc", "hydro"]
+    ),
+    multipleChoiceQuestion("Aldehydes cannot be a side group", "true", [
+      "false",
+    ]),
+    multipleChoiceQuestion("Ketones can be a side group", "false", ["true"]),
   ],
+
   [
     multipleChoiceQuestion("Monomers need to have unsaturation.", "True", [
       "False",
     ]),
+    multipleChoiceQuestion(
+      "Which conditions does addition polymerization not require?",
+      "sulfuric acid",
+      ["increased pressure", "increased temperature", "UV light"]
+    ),
+    multipleChoiceQuestion(
+      "Which of the following is a catalyst used in addition polymerization?",
+      "H2O2",
+      ["TiCl3", "H2SO4", "Ni"]
+    ),
+    multipleChoiceQuestion(
+      "Which term describes the position of tails?",
+      "Tacticity",
+      ["Tailicity", "syndiocity", "stereoisomerism"]
+    ),
+  ],
+
+  [],
+
+  [],
+
+  [],
+
+  [],
+
+  [],
+
+  [],
+];
+
+export const utilityQuestions = [
+  [
+    multipleChoiceQuestion("The flaps on goggles can be open.", "false", [
+      "true",
+    ]),
+  ],
+  [
+    multipleChoiceQuestion(
+      "What is the max temperature that the pH probe can withstand?",
+      "60°C",
+      ["50°C", "80°C", "70°C"]
+    ),
   ],
   [],
   [],
-  [],
-  [],
-  [],
-  [],
+];
+
+export const auctionQuestions = [];
+
+export const shuffledCopy = (questionDeck: QuestionCollection) =>
+  [...questionDeck]
+    .sort(() => 0.5 - Math.random())
+    .map((question) => ({ ...question }));
+
+export const chanceSpinner: Spinner = [
+  {
+    name: "Creativity",
+    maxValue: 0.33,
+  },
+  { name: "Activity", maxValue: 0.67 },
+  { name: "Service", maxValue: 1 },
 ];

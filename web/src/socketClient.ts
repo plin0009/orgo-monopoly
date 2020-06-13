@@ -10,6 +10,11 @@ import {
   Character,
   GameState,
   TurnState,
+  ValueOf,
+  ActionData,
+  Reaction,
+  GamePlayer,
+  Answer,
 } from "../../types";
 
 import update from "immutability-helper";
@@ -19,9 +24,14 @@ export const socket = io(server);
 
 interface Updates {
   setGame: Dispatch<SetStateAction<Game | GameError>>;
+  setActionData: Dispatch<SetStateAction<ValueOf<ActionData> | null>>;
   setMe: Dispatch<SetStateAction<string | null>>;
 }
-export const subscribeToUpdates = ({ setGame, setMe }: Updates) => {
+export const subscribeToUpdates = ({
+  setGame,
+  setActionData,
+  setMe,
+}: Updates) => {
   console.log(`subscribing to updates`);
   if (socket.id !== undefined) {
     setMe(socket.id);
@@ -103,7 +113,8 @@ export const subscribeToUpdates = ({ setGame, setMe }: Updates) => {
     });
   });
 
-  socket.on("startedGame", (gameState: GameState) => {
+  socket.on("startedTurn", (gameState: GameState) => {
+    console.log(gameState);
     setGame((g) => {
       return update(g, { state: { $set: gameState } });
     });
@@ -113,7 +124,55 @@ export const subscribeToUpdates = ({ setGame, setMe }: Updates) => {
     setGame((g) => update(g, { state: { turnState: { $set: turnState } } }));
   });
 
-  socket.on("rolledDice", (turnState: TurnState) => {
+  socket.on(
+    "moving",
+    (
+      turnState: TurnState,
+      newTile: number,
+      passedGoBonus: number,
+      playerId: string
+    ) => {
+      setGame((g) =>
+        update(g, {
+          state: {
+            turnState: { $set: turnState },
+            players: {
+              [playerId]: {
+                currentTile: { $set: newTile },
+                currency: { $apply: (v) => v + passedGoBonus },
+              },
+            },
+          },
+        })
+      );
+    }
+  );
+
+  socket.on("acting", (turnState: TurnState, data: ValueOf<ActionData>) => {
+    console.log(turnState);
+    console.log(data);
+    // make use of data depending on turnState.action
+    setActionData(() => data);
+    setGame((g) => update(g, { state: { turnState: { $set: turnState } } }));
+  });
+
+  socket.on("afterChance", (gamePlayers: Record<string, GamePlayer>) => {
+    setGame((g) => update(g, { state: { players: { $set: gamePlayers } } }));
+  });
+
+  socket.on("afterAction", (gamePlayers: Record<string, GamePlayer>) => {
+    setGame((g) => update(g, { state: { players: { $set: gamePlayers } } }));
+  });
+
+  socket.on("answeringQuestion", (turnState: TurnState) => {
+    setGame((g) => update(g, { state: { turnState: { $set: turnState } } }));
+  });
+
+  socket.on("updateGameState", (gameState: GameState) => {
+    setGame((g) => update(g, { state: { $set: gameState } }));
+  });
+
+  socket.on("updateTurnState", (turnState: TurnState) => {
     setGame((g) => update(g, { state: { turnState: { $set: turnState } } }));
   });
 };
@@ -145,4 +204,13 @@ export const toggleReady = () => {
 
 export const rollDice = () => {
   socket.emit("rollDice");
+};
+
+export const respond = (reaction: ValueOf<Reaction>) => {
+  console.log(`responding with ${reaction}`);
+  socket.emit("reaction", reaction);
+};
+
+export const answerQuestion = (answer: Answer) => {
+  socket.emit("answerQuestion", answer);
 };
