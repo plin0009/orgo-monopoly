@@ -10,7 +10,7 @@ import {
   QuestionCollection,
   Utility,
   Spinner,
-} from "../../types";
+} from "./types";
 
 const collectionToBaseValue = (collection: number) => {
   return currencies.propertyBase + collection * currencies.propertyBonus;
