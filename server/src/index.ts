@@ -21,7 +21,7 @@ import {
   QuestionCollection,
   AnsweringQuestionTurnState,
   Answer,
-} from "../../types";
+} from "types";
 
 import { generateRoomId, generatePlayerName } from "./generator";
 import {

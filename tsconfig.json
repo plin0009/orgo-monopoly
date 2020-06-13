@@ -1,7 +1,0 @@
-{
-  "compilerOptions": {
-    "composite": true,
-    "emitDeclarationOnly": true
-  },
-  "include": ["./types.ts"]
-}

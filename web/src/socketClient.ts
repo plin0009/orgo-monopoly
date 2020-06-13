@@ -15,7 +15,7 @@ import {
   Reaction,
   GamePlayer,
   Answer,
-} from "../../types";
+} from "types";
 
 import update from "immutability-helper";
 

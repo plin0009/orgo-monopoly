@@ -4,7 +4,7 @@
   "description": "Monopoly clone for HL Chemistry, based on the organic chemistry unit.",
   "main": "index.js",
   "scripts": {
-    "tsc-watch": "tsc -w",
+    "tsc-watch": "cd ./types/ && tsc -w",
     "start-server": "cd ./server && concurrently 'npm run tsc-watch' 'npm start'",
     "start-web": "cd ./web && npm start",
     "start": "concurrently 'npm run tsc-watch' 'npm run start-server' 'npm run start-web'"
@@ -23,5 +23,6 @@
   "devDependencies": {
     "concurrently": "^5.2.0",
     "typescript": "^3.9.5"
-  }
+  },
+  "dependencies": {}
 }

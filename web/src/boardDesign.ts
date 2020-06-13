@@ -1,4 +1,4 @@
-import { Character } from "../../types";
+import { Character } from "types";
 import { characters } from "./constants";
 
 export const boardWidth = 2048;
