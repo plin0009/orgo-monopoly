@@ -1,5 +1,5 @@
 import paper from "paper";
-import { Character } from "../../types";
+import { Character } from "./types";
 
 export const characters: Character[] = ["Alfred", "Benny", "Nat", "Hal"];
 

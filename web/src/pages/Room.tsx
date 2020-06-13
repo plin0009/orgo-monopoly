@@ -19,7 +19,7 @@ import {
   ActionData,
   AnsweringQuestionTurnState,
   MultipleChoiceQuestion,
-} from "types";
+} from "../types";
 import { characters } from "../constants";
 import Card, { ChoiceCard } from "../components/Card";
 import Board from "../components/Board";
