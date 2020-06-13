@@ -23,6 +23,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
+    "preinstall": "cd ../types && npm link && cd ../web && npm link types",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
