@@ -18,13 +18,22 @@ const collectionToBaseValue = (collection: number) => {
 };
 
 const toNearestFive = (value: number) => Math.ceil(value / 5) * 5;
-
 const propertyValue = ({ baseValue, upgrade }: Property) => {
   let multiplier = 1;
   switch (upgrade) {
     case 2:
       multiplier += 0.7;
     case 1:
+      multiplier += 0.5;
+  }
+  return baseValue * multiplier;
+};
+const propertyUpgradedValue = ({ baseValue, upgrade }: Property) => {
+  let multiplier = 1;
+  switch (upgrade) {
+    case 1:
+      multiplier += 0.7;
+    case 0:
       multiplier += 0.5;
   }
   return baseValue * multiplier;
@@ -45,6 +54,11 @@ export const propertySellValue = (p: Property) =>
 export const propertyRentValue = (p: Property) =>
   valueToRentPrice(propertyValue(p));
 
+export const propertyUpgradedRentValue = (p: Property) =>
+  valueToRentPrice(propertyUpgradedValue(p));
+export const propertyUpgradedSellValue = (p: Property) =>
+  valueToSellPrice(propertyUpgradedValue(p));
+
 export const utilityBuyPrice = () => utilityBaseValue;
 export const utilitySellValue = () => valueToSellPrice(utilityBaseValue);
 export const utilityRentValue = (count: number) =>
@@ -53,6 +67,11 @@ export const utilityRentValue = (count: number) =>
 const valueToSellPrice = (value: number) => toNearestFive(value * 0.7);
 const valueToRentPrice = (value: number) => toNearestFive(value * 0.5);
 
+export const propertyUpgradeNames = [
+  "lab bench",
+  "lab room",
+  "research facility",
+];
 const property = (name: string, collection: number) =>
   ({
     type: "property",
@@ -137,7 +156,7 @@ export const startingBoard: Board = [
   property("Molecule Manor", 7),
 ];
 
-export const sets = (properties: number[]) => {
+export const sets: (properties: number[]) => number[] = (properties) => {
   const possible: number[][] = [];
   properties.forEach((property) => {
     const collection = (startingBoard[property] as Property).collection;
@@ -157,7 +176,11 @@ export const sets = (properties: number[]) => {
       }
     }
   });
-  return possible;
+  const collections = possible.filter((e) => e);
+  if (collections.length === 0) {
+    return [];
+  }
+  return collections.reduce((prev, current) => [...prev, ...current]);
 };
 
 const multipleChoiceQuestion = (
@@ -182,7 +205,7 @@ export const propertyQuestions: QuestionCollection[] = [
     multipleChoiceQuestion(
       "What is the name for the delocalisation of electrons within a structure?",
       "resonance",
-      ["resonant", "revolvement", "rromatic"]
+      ["resonant", "revolvement", "romatic"]
     ),
     multipleChoiceQuestion(
       "Which type of bond is a saturated bond?",

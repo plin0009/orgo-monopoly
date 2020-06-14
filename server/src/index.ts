@@ -25,6 +25,9 @@ import {
   QuestionReference,
   StartOptions,
   ActingTurnState,
+  UpgradingTurnState,
+  SellingTurnState,
+  SellData,
 } from "./types";
 
 import { generateRoomId, generatePlayerName } from "./generator";
@@ -46,6 +49,12 @@ import {
   sets,
   propertyRentValue,
   propertySellValue,
+  utilityRentValue,
+  utilitySellValue,
+  propertyUpgradePrice,
+  propertyUpgradeNames,
+  propertyUpgradedRentValue,
+  propertyUpgradedSellValue,
 } from "./constants";
 
 const port = process.env.PORT || 8000;
@@ -207,7 +216,7 @@ io.on("connection", (socket) => {
 
     startTurn({
       playerOrder: shuffle(game.activePlayersList),
-      board: startingBoard,
+      board: startingBoard.map((tile) => ({ ...tile })),
       players: gamePlayers,
       propertyQuestionDecks,
       utilityQuestionDecks,
@@ -225,7 +234,8 @@ io.on("connection", (socket) => {
       utilityQuestionDecks: Deck[];
       auctionQuestionDeck: Deck;
       log: string[];
-    } | null = null
+    } | null = null,
+    restarting: boolean = false
   ) => {
     const game = games[currentRoomId!];
     const gameState = game.state;
@@ -238,7 +248,7 @@ io.on("connection", (socket) => {
       clearStoredTimeout(gameState.turnState.timer);
       const oldTurn = gameState.turn;
 
-      turn = oldTurn + 1;
+      turn = restarting ? oldTurn : oldTurn + 1;
       if (turn === gameState.playerOrder.length) {
         turn = 0;
       }
@@ -270,17 +280,26 @@ io.on("connection", (socket) => {
     if (currentPlayer.jailed) {
       // no rights
       (game.state.turnState as StartTurnState).options.roll = false;
+      game.state.log.push(
+        `${
+          game.players[game.state.playerOrder[turn]].name
+        } is busy writing their EE for ${currentPlayer.jailed} more turns.`
+      );
+      currentPlayer.jailed--;
+      io.in(currentRoomId!).emit("updateGameState", game.state);
+      return;
     }
-    if (sets(currentPlayer.properties).filter((e) => e).length !== 0) {
+    if (sets(currentPlayer.properties).length !== 0) {
       (game.state.turnState as StartTurnState).options.upgrade = true;
     }
     if (currentPlayer.properties.length || currentPlayer.utilities.length) {
       (game.state.turnState as StartTurnState).options.sell = true;
     }
 
-    game.state.log.push(
-      `It's ${game.players[game.state.playerOrder[turn]].name}'s turn.`
-    );
+    !restarting &&
+      game.state.log.push(
+        `It's ${game.players[game.state.playerOrder[turn]].name}'s turn.`
+      );
     io.in(currentRoomId!).emit("updateGameState", game.state);
   };
 
@@ -292,6 +311,117 @@ io.on("connection", (socket) => {
 
     // decide what to do based on turnState
   };
+
+  socket.on("seeUpgrade", () => {
+    const game = games[currentRoomId!];
+    const gameState = game.state!;
+
+    const upgradeData = sets(gameState.players[socket.id].properties).map(
+      (position) => {
+        const p = gameState.board[position] as Property;
+        const { name, collection } = p;
+        return {
+          name,
+          position,
+          collection,
+          upgradePrice: propertyUpgradePrice(p),
+          currentRentValue: propertyRentValue(p),
+          newRentValue: propertyUpgradedRentValue(p),
+          newSellValue: propertyUpgradedSellValue(p),
+        };
+      }
+    );
+
+    const timer = setAndStoreTimeout(failedToAct, timers.acting);
+
+    gameState.turnState = {
+      activity: "upgrading",
+      timer,
+      upgradeData,
+    } as UpgradingTurnState;
+    io.in(currentRoomId!).emit("updateGameState", gameState);
+  });
+  socket.on("seeSell", () => {
+    const game = games[currentRoomId!];
+    const gameState = game.state!;
+    const timer = setAndStoreTimeout(failedToAct, timers.acting);
+    const sellData = [
+      ...gameState.players[socket.id].properties.map((position) => {
+        const p = gameState.board[position] as Property;
+        const { name, collection } = p;
+        return {
+          name,
+          position,
+          collection,
+          sellValue: propertySellValue(p),
+        } as SellData[0];
+      }),
+      ...gameState.players[socket.id].utilities.map((position) => {
+        const u = gameState.board[position] as Utility;
+        const { name } = u;
+        return { name, position, sellValue: utilitySellValue() } as SellData[0];
+      }),
+    ];
+    gameState.turnState = {
+      activity: "selling",
+      timer,
+      sellData,
+    } as SellingTurnState;
+
+    io.in(currentRoomId!).emit("updateGameState", gameState);
+  });
+
+  socket.on("requestUpgrade", (position: number) => {
+    const game = games[currentRoomId!];
+    const gameState = game.state!;
+    const tileToSell = gameState.board[position] as Property;
+
+    const upgradePrice = propertyUpgradePrice(tileToSell);
+    tileToSell.upgrade++;
+    gameState.players[socket.id].currency -= upgradePrice;
+    gameState.log.push(
+      `${game.players[socket.id].name} upgraded their ${
+        propertyUpgradeNames[tileToSell.upgrade - 1]
+      } on ${tileToSell.name} to a ${propertyUpgradeNames[tileToSell.upgrade]}.`
+    );
+    startTurn(null, true);
+  });
+  socket.on("requestSell", (position: number) => {
+    const game = games[currentRoomId!];
+    const gameState = game.state!;
+    const tileToSell = gameState.board[position];
+
+    if (tileToSell.type === "property") {
+      const sellValue = propertySellValue(tileToSell as Property);
+      gameState.players[socket.id].properties.splice(
+        gameState.players[socket.id].properties.indexOf(position),
+        1
+      );
+      delete (tileToSell as Property).ownerId;
+      gameState.players[socket.id].currency += sellValue;
+      gameState.log.push(
+        `${game.players[socket.id].name} sold ${
+          tileToSell.name
+        } for ${sellValue} C.`
+      );
+      startTurn(null, true);
+    }
+    if (tileToSell.type === "utility") {
+      const sellValue = utilitySellValue();
+      gameState.players[socket.id].utilities.splice(
+        gameState.players[socket.id].utilities.indexOf(position),
+        1
+      );
+      delete (tileToSell as Utility).ownerId;
+      gameState.players[socket.id].currency += sellValue;
+      gameState.log.push(
+        `${game.players[socket.id].name} sold ${
+          tileToSell.name
+        } for ${sellValue} C.`
+      );
+      return io.in(currentRoomId!).emit("updateGameState", gameState);
+    }
+  });
 
   socket.on("rollDice", () => {
     const game = games[currentRoomId!];
@@ -386,15 +516,12 @@ io.on("connection", (socket) => {
         const pRentValue = propertyRentValue(newTile as Property);
         const pSellValue = propertySellValue(newTile as Property);
 
-        data = {
-          buyPrice: pBuyPrice,
-        };
         if (pBuyPrice > gameState.players[socket.id].currency) {
           // too broke
           gameState.log.push(
-            `${
-              game.players[socket.id].name
-            } cannot afford to build a lab bench on ${newTile.name}.`
+            `${game.players[socket.id].name} cannot afford to build a ${
+              propertyUpgradeNames[0]
+            } on ${newTile.name}.`
           );
           timerFunction = startTurn;
           timerMs = timers.nothing;
@@ -405,17 +532,37 @@ io.on("connection", (socket) => {
           gameState.log.push(
             `${game.players[socket.id].name} paid ${
               game.players[(newTile as Property).ownerId!].name
-            } for using ${newTile.name}.`
+            } ${pRentValue} C for using ${newTile.name}.`
           );
+
+          gameState.players[socket.id].currency -= pRentValue;
+          gameState.players[
+            (newTile as Property).ownerId!
+          ].currency += pRentValue;
           timerFunction = startTurn;
           timerMs = timers.nothing;
           showTimer = false;
           action = "nothing";
+        } else {
+          data = {
+            buyPrice: pBuyPrice,
+            rentValue: pRentValue,
+            sellValue: pSellValue,
+          };
+          gameState.log.push(
+            `${game.players[socket.id].name} has the option to build a ${
+              propertyUpgradeNames[0]
+            } on ${newTile.name}.`
+          );
         }
         break;
       case "utility":
         const uBuyPrice = utilityBuyPrice();
-        data = { buyPrice: uBuyPrice };
+        const uRentValue = utilityRentValue(
+          game.state!.players[socket.id].utilities.length + 1
+        );
+        const uSellValue = utilitySellValue();
+
         if (uBuyPrice > gameState.players[socket.id].currency) {
           // too broke
           gameState.log.push(
@@ -428,13 +575,29 @@ io.on("connection", (socket) => {
           gameState.log.push(
             `${game.players[socket.id].name} paid ${
               game.players[(newTile as Utility).ownerId!].name
-            } for using ${newTile.name}.`
+            } ${uRentValue} C for using ${newTile.name}.`
           );
+
+          gameState.players[socket.id].currency -= uRentValue;
+          gameState.players[
+            (newTile as Utility).ownerId!
+          ].currency += uRentValue;
 
           timerFunction = startTurn;
           timerMs = timers.nothing;
           showTimer = false;
           action = "nothing";
+        } else {
+          data = {
+            buyPrice: uBuyPrice,
+            rentValue: uRentValue,
+            sellValue: uSellValue,
+          };
+          gameState.log.push(
+            `${
+              game.players[socket.id].name
+            } has the option of taking ownership of ${newTile.name}.`
+          );
         }
         break;
       case "jail":
@@ -558,10 +721,20 @@ io.on("connection", (socket) => {
       case "Creativity":
         // add 100 to player's balance
         gameState.players[socket.id].currency += 100;
+        gameState.log.push(
+          `${
+            game.players[socket.id].name
+          }'s creative art piece drew interest and won 100 C from a local art contest.`
+        );
         break;
       case "Activity":
         // remove 100 to player's balance
         gameState.players[socket.id].currency -= 100;
+        gameState.log.push(
+          `${
+            game.players[socket.id].name
+          } spent 100 C on sports gear for a physical activity experience.`
+        );
         break;
       case "Service":
         // add 50 to everyone else's balance, subtracted from player's balance
@@ -575,8 +748,17 @@ io.on("connection", (socket) => {
         });
 
         gameState.players[socket.id].currency -= total;
+        gameState.log.push(
+          `${
+            game.players[socket.id].name
+          } volunteered their time to benefit the ones around them (by 50 C for each person).`
+        );
         break;
     }
+    gameState.turnState = {
+      activity: "finishing turn",
+      timer: setAndStoreTimeout(startTurn, timers.nothing),
+    };
     io.in(currentRoomId!).emit("updateGameState", gameState);
   };
 
@@ -586,6 +768,17 @@ io.on("connection", (socket) => {
 
     gameState.players[socket.id].currency -= currencyLost;
     gameState.players[socket.id].jailed += turnsJailed;
+
+    gameState.log.push(
+      `${
+        game.players[socket.id].name
+      } paid ${currencyLost} C and is in jail for ${turnsJailed} turns.`
+    );
+
+    gameState.turnState = {
+      activity: "finishing turn",
+      timer: setAndStoreTimeout(startTurn, timers.nothing),
+    };
 
     io.in(currentRoomId!).emit("updateGameState", gameState);
   };
@@ -600,6 +793,7 @@ io.on("connection", (socket) => {
 
     const questionIndex = questionDeck.splice(0, 1)[0];
     questionDeck.push(questionIndex);
+    console.log(questionIndex);
 
     const questionReference = {
       category: questionCategory,
@@ -607,12 +801,14 @@ io.on("connection", (socket) => {
       index: questionIndex,
     };
 
+    console.log(JSON.stringify(questionReference));
     // const question = questionCollection[questionIndex];
     const question = getQuestionFromDeck({
       category: questionCategory,
       collection: questionCollection,
       index: questionIndex,
     });
+    console.log(JSON.stringify(question));
 
     const choices =
       question.questionType === "multiple choice"
@@ -689,9 +885,9 @@ io.on("connection", (socket) => {
         gameState.log.push(
           `${
             game.players[socket.id].name
-          } answered the question correctly, and took ownership of ${
-            currentTile.name
-          }.`
+          } answered the question correctly, and built a ${
+            propertyUpgradeNames[0]
+          } on ${currentTile.name}.`
         );
         gameState.turnState = {
           activity: "finishing turn",
@@ -718,7 +914,6 @@ io.on("connection", (socket) => {
           showTimer: false,
         };
         io.in(currentRoomId!).emit("updateGameState", gameState);
-        startTurn();
         return;
       }
       if (currentTile.type === "auction") {
@@ -739,7 +934,13 @@ io.on("connection", (socket) => {
       gameState.log.push(
         `${game.players[socket.id].name} did not answer the question correctly.`
       );
-      startTurn();
+
+      gameState.turnState = {
+        activity: "finishing turn",
+        timer: setAndStoreTimeout(startTurn, timers.nothing),
+        showTimer: false,
+      };
+      io.in(currentRoomId!).emit("updateGameState", gameState);
     }
   });
 

@@ -46,6 +46,8 @@ export type Turn = number;
 export type TurnStateActivity =
   | "starting turn"
   | "staying in jail"
+  | "selling"
+  | "upgrading"
   | "rolling dice"
   | "moving"
   | "acting"
@@ -94,6 +96,29 @@ export interface RollingDiceTurnState extends TurnState {
   activity: "rolling dice";
   showTimer: false;
 }
+export type SellData = {
+  name: string;
+  position: number;
+  collection?: number;
+  sellValue: number;
+}[];
+export interface SellingTurnState extends TurnState {
+  activity: "selling";
+  sellData: SellData;
+}
+export type UpgradeData = {
+  name: string;
+  position: number;
+  collection: number;
+  upgradePrice: number;
+  currentRentValue: number;
+  newRentValue: number;
+  newSellValue: number;
+}[];
+export interface UpgradingTurnState extends TurnState {
+  activity: "upgrading";
+  upgradeData: UpgradeData;
+}
 export interface MovingTurnState extends TurnState {
   activity: "moving";
   rolled: number;
@@ -110,8 +135,10 @@ export interface ActingTurnState extends TurnState {
 export interface ActionData {
   "buy property": {
     buyPrice: number;
+    rentValue: number;
+    sellValue: number;
   };
-  "buy utility": { buyPrice: number };
+  "buy utility": { buyPrice: number; rentValue: number; sellValue: number };
   chance: null;
   jail: {
     fullBail: number;
@@ -128,10 +155,13 @@ export type ValueOf<
   }
 > = U[keyof U];
 
+type OtherPurpose = { upgrading: { purpose: "upgrading"; tile: number } }; // not related to current tile
+
 export interface AnsweringQuestionTurnState extends TurnState {
   activity: "answering question";
   questionPrompt: QuestionPrompt;
   questionReference: QuestionReference;
+  otherPurpose?: ValueOf<OtherPurpose>;
 }
 
 export interface GamePlayer {

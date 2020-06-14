@@ -177,3 +177,19 @@ export const respond = (reaction: ValueOf<Reaction>) => {
 export const answerQuestion = (answer: Answer) => {
   socket.emit("answerQuestion", answer);
 };
+
+export const seeUpgrades = () => {
+  socket.emit("seeUpgrades");
+};
+
+export const seeSell = () => {
+  socket.emit("seeSell");
+};
+
+export const requestUpgrade = (position: number) => {
+  socket.emit("requestUpgrade", position);
+};
+
+export const requestSell = (position: number) => {
+  socket.emit("requestSell", position);
+};

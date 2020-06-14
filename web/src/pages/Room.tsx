@@ -10,18 +10,26 @@ import {
   rollDice,
   respond,
   answerQuestion,
+  seeUpgrades,
+  seeSell,
+  requestUpgrade,
+  requestSell,
 } from "../socketClient";
 import {
   Game,
   GameError,
   StartTurnState,
-  ValueOf,
   ActionData,
   AnsweringQuestionTurnState,
   ActingTurnState,
+  Property,
+  Character,
+  Utility,
+  UpgradingTurnState,
+  SellingTurnState,
 } from "../types";
 import { characters, colorOfTile } from "../constants";
-import Card, { ChoiceCard } from "../components/Card";
+import Card, { ChoiceCard, UpgradeCard, SellCard } from "../components/Card";
 import Board from "../components/Board";
 import PlayerTag from "../components/PlayerTag";
 import CharacterButton from "../components/CharacterButton";
@@ -126,10 +134,56 @@ const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
                     character: game.players[playerId].character!,
                     position: game.state!.players[playerId].currentTile,
                   }))}
+                  properties={
+                    game.state.board
+                      .map((tile, position) => {
+                        if (
+                          tile.type === "property" &&
+                          (tile as Property).ownerId !== undefined
+                        ) {
+                          return {
+                            property: tile,
+                            position,
+                            character:
+                              game.players[(tile as Property).ownerId!]
+                                .character,
+                          };
+                        }
+                        return null;
+                      })
+                      .filter((e) => e !== null) as {
+                      property: Property;
+                      position: number;
+                      character: Character;
+                    }[]
+                  }
+                  utilities={
+                    game.state.board
+                      .map((tile, position) => {
+                        if (
+                          tile.type === "utility" &&
+                          (tile as Utility).ownerId !== undefined
+                        ) {
+                          console.log(tile);
+                          return {
+                            utility: tile,
+                            position,
+                            character:
+                              game.players[(tile as Utility).ownerId!]
+                                .character,
+                          };
+                        }
+                        return null;
+                      })
+                      .filter((e) => e !== null) as {
+                      utility: Utility;
+                      position: number;
+                      character: Character;
+                    }[]
+                  }
                 />
               </div>
             </div>
-
             <div className="statusBar">
               <h1>{game.state.log[game.state.log.length - 1]}</h1>
               {me === game.state.playerOrder[game.state.turn] &&
@@ -145,7 +199,7 @@ const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
                     Roll
                   </button>
                   <button
-                    onClick={() => {}}
+                    onClick={() => seeUpgrades()}
                     disabled={
                       (game.state.turnState as StartTurnState).options
                         .upgrade === false
@@ -154,7 +208,7 @@ const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
                     Upgrade
                   </button>
                   <button
-                    onClick={() => {}}
+                    onClick={() => seeSell()}
                     disabled={
                       (game.state.turnState as StartTurnState).options.sell ===
                       false
@@ -165,7 +219,6 @@ const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
                 </div>
               ) : null}
             </div>
-
             {me === game.state.playerOrder[game.state.turn] &&
             game.state.turnState.activity === "answering question" ? (
               <ChoiceCard
@@ -186,7 +239,6 @@ const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
                 )}
               />
             ) : null}
-
             {me === game.state.playerOrder[game.state.turn] &&
             game.state.turnState.action !== undefined &&
             game.state.turnState.action !== "nothing" ? (
@@ -211,7 +263,13 @@ const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
                   } for ${
                     ((game.state.turnState as ActingTurnState)
                       .actionData as ActionData["buy property"]).buyPrice
-                  } C?`}
+                  } C? Its rent value is ${
+                    ((game.state.turnState as ActingTurnState)
+                      .actionData as ActionData["buy property"]).rentValue
+                  } C and its sell value is ${
+                    ((game.state.turnState as ActingTurnState)
+                      .actionData as ActionData["buy property"]).sellValue
+                  } C.`}
                   choices={[
                     { name: "Build", onClick: () => respond("accept") },
                     { name: "Decline", onClick: () => respond("decline") },
@@ -238,7 +296,13 @@ const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
                   } for ${
                     ((game.state.turnState as ActingTurnState)
                       .actionData as ActionData["buy utility"]).buyPrice
-                  } C?`}
+                  } C? All your utilities' rent value will be ${
+                    ((game.state.turnState as ActingTurnState)
+                      .actionData as ActionData["buy utility"]).rentValue
+                  } C and its sell value is ${
+                    ((game.state.turnState as ActingTurnState)
+                      .actionData as ActionData["buy utility"]).sellValue
+                  } C.`}
                   choices={[
                     { name: "Purchase", onClick: () => respond("accept") },
                     { name: "Decline", onClick: () => respond("decline") },
@@ -288,6 +352,26 @@ const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
                   ]}
                 />
               ) : null
+            ) : null}
+            {me === game.state.playerOrder[game.state.turn] &&
+            game.state.turnState.activity === "upgrading" ? (
+              <UpgradeCard
+                title="Upgrade"
+                color="#0004"
+                upgradeData={
+                  (game.state.turnState as UpgradingTurnState).upgradeData
+                }
+                onUpgrade={requestUpgrade}
+              />
+            ) : null}
+            {me === game.state.playerOrder[game.state.turn] &&
+            game.state.turnState.activity === "selling" ? (
+              <SellCard
+                title="Sell"
+                color="#0004"
+                sellData={(game.state.turnState as SellingTurnState).sellData}
+                onSell={requestSell}
+              />
             ) : null}
           </div>
           <div className="rightGameScreen">
