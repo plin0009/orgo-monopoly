@@ -18,13 +18,12 @@ import {
   ActionData,
   ValueOf,
   Reaction,
-  QuestionCollection,
   AnsweringQuestionTurnState,
   Answer,
-  QuestionPrompt,
   MultipleChoiceQuestion,
   Deck,
   QuestionReference,
+  StartOptions,
 } from "./types";
 
 import { generateRoomId, generatePlayerName } from "./generator";
@@ -43,6 +42,7 @@ import {
   shuffledCopy,
   shuffle,
   getQuestionFromDeck,
+  sets,
 } from "./constants";
 
 const port = process.env.PORT || 8000;
@@ -209,6 +209,7 @@ io.on("connection", (socket) => {
       propertyQuestionDecks,
       utilityQuestionDecks,
       auctionQuestionDeck,
+      log: ["The game has been started."],
     });
   };
 
@@ -220,6 +221,7 @@ io.on("connection", (socket) => {
       propertyQuestionDecks: Deck[];
       utilityQuestionDecks: Deck[];
       auctionQuestionDeck: Deck;
+      log: string[];
     } | null = null
   ) => {
     const game = games[currentRoomId!];
@@ -243,15 +245,39 @@ io.on("connection", (socket) => {
 
     console.log(`starting turn`);
 
+    const options: StartOptions = {
+      roll: true,
+      upgrade: false,
+      sell: false,
+    };
+
     game.state = {
       ...(initialGameState || gameState)!,
       turn,
-      turnState: { timer, activity: "starting turn" } as StartTurnState,
+      turnState: {
+        timer,
+        activity: "starting turn",
+        options,
+      } as StartTurnState,
     };
 
-    if (game.state.players[game.state.playerOrder[game.state.turn]].jailed) {
+    const currentPlayer =
+      game.state.players[game.state.playerOrder[game.state.turn]];
+
+    if (currentPlayer.jailed) {
+      // no rights
+      (game.state.turnState as StartTurnState).options.roll = false;
+    }
+    if (sets(currentPlayer.properties).filter((e) => e).length !== 0) {
+      (game.state.turnState as StartTurnState).options.upgrade = true;
+    }
+    if (currentPlayer.properties.length || currentPlayer.utilities.length) {
+      (game.state.turnState as StartTurnState).options.sell = true;
     }
 
+    game.state.log.push(
+      `It's ${game.players[game.state.playerOrder[turn]].name}'s turn.`
+    );
     io.in(currentRoomId!).emit("updateGameState", game.state);
   };
 
@@ -280,8 +306,10 @@ io.on("connection", (socket) => {
       timer: rollingDiceTimer,
       showTimer: false,
     } as RollingDiceTurnState;
+    gameState.log.push(`${game.players[socket.id].name} is rolling the dice.`);
 
-    io.in(currentRoomId!).emit("updateTurnState", gameState.turnState); // newTurnState event instead?
+    io.in(currentRoomId!).emit("updateGameState", gameState);
+    // io.in(currentRoomId!).emit("updateTurnState", gameState.turnState); // newTurnState event instead?
   });
 
   const moving = () => {
@@ -293,31 +321,26 @@ io.on("connection", (socket) => {
     let newTile =
       (gameState.players[socket.id].currentTile + diceRoll) %
       gameState.board.length;
-    gameState.players[socket.id].currentTile = newTile;
     let passedGo = false;
 
     if (newTile < diceRoll) {
       // passed GO
       passedGo = true;
-      gameState.players[socket.id].currency += currencies.passGo;
     }
 
     const movingTimer = setAndStoreTimeout(moved, timers.moving);
 
+    gameState.log.push(`${game.players[socket.id].name} rolled a ${diceRoll}.`);
     gameState.turnState = {
       timer: movingTimer,
       activity: "moving",
       rolled: diceRoll,
+      newTile: newTile,
+      passedGo,
       showTimer: false,
     } as MovingTurnState;
 
-    io.in(currentRoomId!).emit(
-      "moving",
-      gameState.turnState,
-      newTile,
-      passedGo ? currencies.passGo : 0,
-      socket.id
-    ); // newTurnState event instead?
+    io.in(currentRoomId!).emit("updateGameState", gameState);
   };
 
   const moved = () => {
@@ -325,6 +348,18 @@ io.on("connection", (socket) => {
     const gameState = game.state!;
 
     clearStoredTimeout(gameState.turnState.timer);
+    if ((gameState.turnState as MovingTurnState).passedGo) {
+      gameState.log.push(
+        `${game.players[socket.id].name} passed GO and collected ${
+          currencies.passGo
+        } C.`
+      );
+      gameState.players[socket.id].currency += currencies.passGo;
+    }
+    gameState.players[
+      socket.id
+    ].currentTile = (gameState.turnState as MovingTurnState).newTile;
+
     io.in(currentRoomId!).emit("updateGameState", gameState);
     acting();
   };
@@ -534,7 +569,11 @@ io.on("connection", (socket) => {
       questionPrompt,
       questionReference,
     } as AnsweringQuestionTurnState;
-    io.in(currentRoomId!).emit("updateTurnState", gameState.turnState);
+    gameState.log.push(
+      `${game.players[socket.id].name} is answering a question.`
+    );
+    io.in(currentRoomId!).emit("updateGameState", gameState);
+    // io.in(currentRoomId!).emit("updateTurnState", gameState.turnState);
   };
 
   const askPropertyQuestion = () => {
@@ -583,14 +622,37 @@ io.on("connection", (socket) => {
         );
         gameState.players[socket.id].properties.push(currentTilePosition);
         (currentTile as Property).ownerId = socket.id;
+        gameState.log.push(
+          `${
+            game.players[socket.id].name
+          } answered the question correctly, and took ownership of ${
+            currentTile.name
+          }.`
+        );
+        gameState.turnState = {
+          activity: "finishing turn",
+          timer: setAndStoreTimeout(startTurn, timers.nothing),
+          showTimer: false,
+        };
         io.in(currentRoomId!).emit("updateGameState", gameState);
-        startTurn();
         return;
       }
       if (currentTile.type === "utility") {
         gameState.players[socket.id].currency -= utilityBuyPrice();
         gameState.players[socket.id].utilities.push(currentTilePosition);
         (currentTile as Utility).ownerId = socket.id;
+        gameState.log.push(
+          `${
+            game.players[socket.id].name
+          } answered the question correctly, and took ownership of ${
+            currentTile.name
+          }`
+        );
+        gameState.turnState = {
+          activity: "finishing turn",
+          timer: setAndStoreTimeout(startTurn, timers.nothing),
+          showTimer: false,
+        };
         io.in(currentRoomId!).emit("updateGameState", gameState);
         startTurn();
         return;
@@ -602,12 +664,21 @@ io.on("connection", (socket) => {
           timer: setAndStoreTimeout(failedToAct, timers.auctioning),
           activity: "auctioning",
         };
+        gameState.log.push(
+          `${
+            game.players[socket.id].name
+          } answered the question correctly, and can now listen to trade offers.`
+        );
         return io
           .in(currentRoomId!)
           .emit("updateTurnState", gameState.turnState);
       }
+    } else {
+      gameState.log.push(
+        `${game.players[socket.id].name} did not answer the question correctly.`
+      );
+      startTurn();
     }
-    // else,
   });
 
   /*

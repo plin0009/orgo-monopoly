@@ -14,7 +14,7 @@ import {
 import {
   Game,
   GameError,
-  MovingTurnState,
+  StartTurnState,
   ValueOf,
   ActionData,
   AnsweringQuestionTurnState,
@@ -133,37 +133,38 @@ const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
             </div>
 
             <div className="statusBar">
-              {game.state.turnState.activity === "starting turn" ? (
-                <>
-                  <h1>
-                    {`It's 
-              ${
-                game.players[game.state.playerOrder[game.state.turn]].name
-              }'s turn`}
-                  </h1>
-                  {me === game.state.playerOrder[game.state.turn] ? (
-                    <button
-                      onClick={() => {
-                        rollDice();
-                      }}
-                    >
-                      Roll
-                    </button>
-                  ) : null}
-                </>
-              ) : game.state.turnState.activity === "rolling dice" ? (
-                <>
-                  <h1>Rolling dice</h1>
-                </>
-              ) : game.state.turnState.activity === "moving" ? (
-                <>
-                  <h1>
-                    {`${
-                      game.players[game.state.playerOrder[game.state.turn]].name
+              <h1>{game.state.log[game.state.log.length - 1]}</h1>
+              {me === game.state.playerOrder[game.state.turn] &&
+              game.state.turnState.activity === "starting turn" ? (
+                <div>
+                  <button
+                    onClick={() => rollDice()}
+                    disabled={
+                      (game.state.turnState as StartTurnState).options.roll ===
+                      false
                     }
-            rolled a ${(game.state.turnState as MovingTurnState).rolled}`}
-                  </h1>
-                </>
+                  >
+                    Roll
+                  </button>
+                  <button
+                    onClick={() => {}}
+                    disabled={
+                      (game.state.turnState as StartTurnState).options
+                        .upgrade === false
+                    }
+                  >
+                    Upgrade
+                  </button>
+                  <button
+                    onClick={() => {}}
+                    disabled={
+                      (game.state.turnState as StartTurnState).options.sell ===
+                      false
+                    }
+                  >
+                    Sell
+                  </button>
+                </div>
               ) : null}
             </div>
 
@@ -298,8 +299,12 @@ const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
                 );
               })}
             </div>
-            <div></div>
-            <h1>Players</h1>
+            <h1>Log</h1>
+            <div className="log">
+              {game.state.log.map((message, index) => (
+                <p key={index}>{message}</p>
+              ))}
+            </div>
           </div>
         </div>
       )}

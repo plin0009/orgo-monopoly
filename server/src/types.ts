@@ -38,6 +38,7 @@ export interface GameState {
   propertyQuestionDecks: Deck[];
   utilityQuestionDecks: Deck[];
   auctionQuestionDeck: Deck;
+  log: string[];
 }
 
 export type Turn = number;
@@ -49,7 +50,8 @@ export type TurnStateActivity =
   | "moving"
   | "acting"
   | "answering question"
-  | "auctioning";
+  | "auctioning"
+  | "finishing turn";
 
 export type Action =
   | "buy property"
@@ -68,6 +70,12 @@ export type Reaction = {
   nothing: null;
 };
 
+export interface StartOptions {
+  roll: boolean;
+  upgrade: boolean;
+  sell: boolean;
+}
+
 export interface TurnState {
   activity: TurnStateActivity;
   timer: number;
@@ -76,6 +84,7 @@ export interface TurnState {
 }
 export interface StartTurnState extends TurnState {
   activity: "starting turn";
+  options: StartOptions;
 }
 export interface JailedTurnState extends TurnState {
   activity: "staying in jail";
@@ -88,6 +97,8 @@ export interface RollingDiceTurnState extends TurnState {
 export interface MovingTurnState extends TurnState {
   activity: "moving";
   rolled: number;
+  newTile: number;
+  passedGo: boolean;
   showTimer: false;
 }
 export interface ActingTurnState extends TurnState {

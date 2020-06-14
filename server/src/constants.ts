@@ -137,6 +137,29 @@ export const startingBoard: Board = [
   property("Pathway Palace", 7),
 ];
 
+export const sets = (properties: number[]) => {
+  const possible: number[][] = [];
+  properties.forEach((property) => {
+    const collection = (startingBoard[property] as Property).collection;
+    if (possible[collection] === undefined) {
+      possible[collection] = [];
+    }
+    possible[collection].push(property);
+  });
+  startingBoard.forEach((tile, tileIndex) => {
+    if (tile.type === "property") {
+      const collection = (tile as Property).collection;
+      if (
+        possible[collection] !== undefined &&
+        possible[collection].indexOf(tileIndex) === -1
+      ) {
+        delete possible[collection];
+      }
+    }
+  });
+  return possible;
+};
+
 const multipleChoiceQuestion = (
   questionText: string,
   correct: Answer,
