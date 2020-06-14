@@ -19,7 +19,10 @@ import {
 
 import update from "immutability-helper";
 
-const server = "http://localhost:8000";
+const server =
+  process.env.NODE_ENV === "production"
+    ? "https://orgo-monopoly-server.herokuapp.com/"
+    : "http://localhost:8000";
 export const socket = io(server);
 
 interface Updates {
@@ -111,17 +114,6 @@ export const subscribeToUpdates = ({
         },
       });
     });
-  });
-
-  socket.on("startedTurn", (gameState: GameState) => {
-    console.log(gameState);
-    setGame((g) => {
-      return update(g, { state: { $set: gameState } });
-    });
-  });
-
-  socket.on("rollingDice", (turnState: TurnState) => {
-    setGame((g) => update(g, { state: { turnState: { $set: turnState } } }));
   });
 
   socket.on(

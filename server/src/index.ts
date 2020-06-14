@@ -21,6 +21,10 @@ import {
   QuestionCollection,
   AnsweringQuestionTurnState,
   Answer,
+  QuestionPrompt,
+  MultipleChoiceQuestion,
+  Deck,
+  QuestionReference,
 } from "./types";
 
 import { generateRoomId, generatePlayerName } from "./generator";
@@ -37,6 +41,8 @@ import {
   utilityQuestions,
   auctionQuestions,
   shuffledCopy,
+  shuffle,
+  getQuestionFromDeck,
 } from "./constants";
 
 const port = process.env.PORT || 8000;
@@ -192,26 +198,18 @@ io.on("connection", (socket) => {
 
     console.log(`starting game ${currentRoomId}`);
 
-    const propertyQuestionDecks: QuestionCollection[] = propertyQuestions.map(
-      shuffledCopy
-    );
-    const utilityQuestionDecks: QuestionCollection[] = utilityQuestions.map(
-      shuffledCopy
-    );
-    const auctionQuestionDeck: QuestionCollection = shuffledCopy(
-      auctionQuestions
-    );
+    const propertyQuestionDecks = propertyQuestions.map(shuffledCopy);
+    const utilityQuestionDecks = utilityQuestions.map(shuffledCopy);
+    const auctionQuestionDeck = shuffledCopy(auctionQuestions);
 
     startTurn({
-      playerOrder: [...game.activePlayersList].sort(() => 0.5 - Math.random()),
+      playerOrder: shuffle(game.activePlayersList),
       board: startingBoard,
       players: gamePlayers,
       propertyQuestionDecks,
       utilityQuestionDecks,
       auctionQuestionDeck,
     });
-
-    // io.in(currentRoomId!).emit("startedGame", game.state);
   };
 
   const startTurn = (
@@ -219,9 +217,9 @@ io.on("connection", (socket) => {
       playerOrder: string[];
       board: Board;
       players: Record<string, GamePlayer>;
-      propertyQuestionDecks: QuestionCollection[];
-      utilityQuestionDecks: QuestionCollection[];
-      auctionQuestionDeck: QuestionCollection;
+      propertyQuestionDecks: Deck[];
+      utilityQuestionDecks: Deck[];
+      auctionQuestionDeck: Deck;
     } | null = null
   ) => {
     const game = games[currentRoomId!];
@@ -254,7 +252,7 @@ io.on("connection", (socket) => {
     if (game.state.players[game.state.playerOrder[game.state.turn]].jailed) {
     }
 
-    io.in(currentRoomId!).emit("startedTurn", game.state);
+    io.in(currentRoomId!).emit("updateGameState", game.state);
   };
 
   const failedToAct = () => {
@@ -283,7 +281,7 @@ io.on("connection", (socket) => {
       showTimer: false,
     } as RollingDiceTurnState;
 
-    io.in(currentRoomId!).emit("rollingDice", game.state!.turnState); // newTurnState event instead?
+    io.in(currentRoomId!).emit("updateTurnState", gameState.turnState); // newTurnState event instead?
   });
 
   const moving = () => {
@@ -327,7 +325,7 @@ io.on("connection", (socket) => {
     const gameState = game.state!;
 
     clearStoredTimeout(gameState.turnState.timer);
-    io.in(currentRoomId!).emit("moved", game.state!);
+    io.in(currentRoomId!).emit("updateGameState", gameState);
     acting();
   };
 
@@ -492,17 +490,51 @@ io.on("connection", (socket) => {
     io.in(currentRoomId!).emit("afterAction", gameState.players);
   };
 
-  const askQuestion = (questionDeck: QuestionCollection) => {
+  const askQuestion = (
+    questionDeck: Deck,
+    questionCategory: QuestionReference["category"],
+    questionCollection?: number
+  ) => {
     const game = games[currentRoomId!];
     const gameState = game.state!;
 
-    const question = questionDeck.splice(0, 1)[0];
-    questionDeck.push(question);
+    const questionIndex = questionDeck.splice(0, 1)[0];
+    questionDeck.push(questionIndex);
+
+    const questionReference = {
+      category: questionCategory,
+      collection: questionCollection,
+      index: questionIndex,
+    };
+
+    // const question = questionCollection[questionIndex];
+    const question = getQuestionFromDeck({
+      category: questionCategory,
+      collection: questionCollection,
+      index: questionIndex,
+    });
+
+    const choices =
+      question.questionType === "multiple choice"
+        ? shuffle([
+            question.correct,
+            ...(question as MultipleChoiceQuestion).wrong,
+          ])
+        : undefined;
+
+    const questionPrompt = {
+      questionType: question.questionType,
+      questionText: question.questionText,
+      questionImage: question.questionImage,
+      choices,
+    };
+
     gameState.turnState = {
       activity: "answering question",
-      question,
+      questionPrompt,
+      questionReference,
     } as AnsweringQuestionTurnState;
-    io.in(currentRoomId!).emit("answeringQuestion", gameState.turnState);
+    io.in(currentRoomId!).emit("updateTurnState", gameState.turnState);
   };
 
   const askPropertyQuestion = () => {
@@ -514,7 +546,7 @@ io.on("connection", (socket) => {
     ] as Property;
     const questionDeck =
       gameState.propertyQuestionDecks[currentTile.collection];
-    askQuestion(questionDeck);
+    askQuestion(questionDeck, "property", currentTile.collection);
   };
 
   const askUtilityQuestion = () => {
@@ -525,22 +557,23 @@ io.on("connection", (socket) => {
       gameState.players[socket.id].currentTile
     ] as Utility;
     const questionDeck = gameState.utilityQuestionDecks[currentTile.collection];
-    askQuestion(questionDeck);
+    askQuestion(questionDeck, "utility", currentTile.collection);
   };
   const askAuctionQuestion = () => {
     const game = games[currentRoomId!];
     const gameState = game.state!;
-    askQuestion(gameState.auctionQuestionDeck);
+    askQuestion(gameState.auctionQuestionDeck, "auction");
   };
 
   socket.on("answerQuestion", (answer: Answer) => {
     const game = games[currentRoomId!];
     const gameState = game.state!;
 
-    if (
-      answer ===
-      (gameState.turnState as AnsweringQuestionTurnState).question.correct
-    ) {
+    const question = getQuestionFromDeck(
+      (gameState.turnState as AnsweringQuestionTurnState).questionReference
+    );
+
+    if (answer === question.correct) {
       // buy the property
       const currentTilePosition = gameState.players[socket.id].currentTile;
       const currentTile = gameState.board[currentTilePosition];
@@ -577,18 +610,20 @@ io.on("connection", (socket) => {
     // else,
   });
 
-  socket.on("disconnect", () => {
-    console.log(`disconnected from room ${currentRoomId}`);
-    if (currentRoomId !== null) {
-      delete games[currentRoomId].players[socket.id];
-      socket.to(currentRoomId).emit("removePlayer", socket.id);
-      if (Object.keys(games[currentRoomId].players).length === 0) {
-        // todo: add cooldown before closing room
-        console.log(`closing room ${currentRoomId}`);
-        delete games[currentRoomId];
-      }
-    }
-  });
+  /*
+   *socket.on("disconnect", () => {
+   *  console.log(`disconnected from room ${currentRoomId}`);
+   *  if (currentRoomId !== null) {
+   *    delete games[currentRoomId].players[socket.id];
+   *    socket.to(currentRoomId).emit("removePlayer", socket.id);
+   *    if (Object.keys(games[currentRoomId].players).length === 0) {
+   *      // todo: add cooldown before closing room
+   *      console.log(`closing room ${currentRoomId}`);
+   *      delete games[currentRoomId];
+   *    }
+   *  }
+   *});
+   */
 });
 
 server.listen(port, () => {

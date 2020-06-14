@@ -10,6 +10,7 @@ import {
   QuestionCollection,
   Utility,
   Spinner,
+  QuestionReference,
 } from "./types";
 
 const collectionToBaseValue = (collection: number) => {
@@ -140,7 +141,13 @@ const multipleChoiceQuestion = (
   questionText: string,
   correct: Answer,
   wrong: Answer[]
-) => ({ questionText, correct, wrong } as MultipleChoiceQuestion);
+) =>
+  ({
+    questionType: "multiple choice",
+    questionText,
+    correct,
+    wrong,
+  } as MultipleChoiceQuestion);
 
 export const propertyQuestions: QuestionCollection[] = [
   [
@@ -339,9 +346,25 @@ export const utilityQuestions = [
 export const auctionQuestions = [];
 
 export const shuffledCopy = (questionDeck: QuestionCollection) =>
-  [...questionDeck]
-    .sort(() => 0.5 - Math.random())
-    .map((question) => ({ ...question }));
+  shuffle(questionDeck.map((_question, index) => index));
+
+export const shuffle = (list: any[]) =>
+  [...list].sort(() => 0.5 - Math.random());
+
+export const getQuestionFromDeck = ({
+  category,
+  collection,
+  index,
+}: QuestionReference) => {
+  switch (category) {
+    case "property":
+      return propertyQuestions[collection!][index];
+    case "utility":
+      return utilityQuestions[collection!][index];
+    case "auction":
+      return auctionQuestions[index];
+  }
+};
 
 export const chanceSpinner: Spinner = [
   {

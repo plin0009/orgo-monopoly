@@ -18,7 +18,7 @@ const Card: React.FC<CardProps> = ({ color, title, children }) => {
 
 interface ChoiceCardProps extends CardProps {
   description: string;
-  choices: { name: string; onClick: () => void }[];
+  choices?: { name: string; onClick: () => void }[];
 }
 
 export const ChoiceCard: React.FC<ChoiceCardProps> = ({
@@ -30,7 +30,7 @@ export const ChoiceCard: React.FC<ChoiceCardProps> = ({
   return (
     <Card {...{ color, title }}>
       <h2>{description}</h2>
-      {choices.map(({ name, onClick }) => (
+      {choices?.map(({ name, onClick }) => (
         <button key={name} onClick={onClick}>
           {name}
         </button>

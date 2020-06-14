@@ -35,9 +35,9 @@ export interface GameState {
   turnState: TurnState;
   players: Record<string, GamePlayer>;
   board: Board;
-  propertyQuestionDecks: QuestionCollection[];
-  utilityQuestionDecks: QuestionCollection[];
-  auctionQuestionDeck: QuestionCollection;
+  propertyQuestionDecks: Deck[];
+  utilityQuestionDecks: Deck[];
+  auctionQuestionDeck: Deck;
 }
 
 export type Turn = number;
@@ -118,7 +118,8 @@ export type ValueOf<
 
 export interface AnsweringQuestionTurnState extends TurnState {
   activity: "answering question";
-  question: Question;
+  questionPrompt: QuestionPrompt;
+  questionReference: QuestionReference;
 }
 
 export interface GamePlayer {
@@ -183,6 +184,7 @@ export type Answer = string;
 
 export interface Question {
   questionType: QuestionType;
+  questionImage?: string;
   questionText: string;
   correct: Answer;
 }
@@ -196,7 +198,21 @@ export interface InputQuestion extends Question {
   questionType: "input";
 }
 
+export interface QuestionPrompt {
+  questionType: QuestionType;
+  questionImage?: string;
+  questionText: string;
+  choices?: Answer[];
+}
+
 export type QuestionCollection = Question[];
+export type Deck = number[];
+
+export interface QuestionReference {
+  category: "property" | "utility" | "auction";
+  collection?: number;
+  index: number;
+}
 
 export type Spinner = {
   name: string;

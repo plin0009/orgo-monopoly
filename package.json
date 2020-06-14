@@ -4,10 +4,10 @@
   "description": "Monopoly clone for HL Chemistry, based on the organic chemistry unit.",
   "main": "index.js",
   "scripts": {
-    "tsc-watch": "cd ./types/ && tsc -w",
-    "start-server": "cd ./server && 'npm start-dev'",
+    "copy-types": "cpx ./server/src/types.ts ./web/src/ -w",
+    "start-server": "cd ./server && npm run start-dev",
     "start-web": "cd ./web && npm start",
-    "start": "concurrently 'npm run tsc-watch' 'npm run start-server' 'npm run start-web'"
+    "start": "concurrently 'npm run copy-types' 'npm run start-server' 'npm run start-web'"
   },
   "repository": {
     "type": "git",
@@ -22,6 +22,7 @@
   "homepage": "https://github.com/plin0009/orgo-monopoly#readme",
   "devDependencies": {
     "concurrently": "^5.2.0",
+    "cpx": "^1.5.0",
     "typescript": "^3.9.5"
   },
   "dependencies": {}

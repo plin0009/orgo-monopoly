@@ -18,11 +18,12 @@ import {
   ValueOf,
   ActionData,
   AnsweringQuestionTurnState,
-  MultipleChoiceQuestion,
 } from "../types";
-import { characters } from "../constants";
+import { characters, colorOfTile } from "../constants";
 import Card, { ChoiceCard } from "../components/Card";
 import Board from "../components/Board";
+import PlayerTag from "../components/PlayerTag";
+import CharacterButton from "../components/CharacterButton";
 
 interface RoomPageParams {
   roomId: string;
@@ -76,27 +77,31 @@ const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
               </button>
             </div>
           ) : null}
-          <h2>Players</h2>
-          {Object.keys(game.players).map((playerId) => (
-            <p key={playerId}>
-              {game.players[playerId].name} is{" "}
-              {game.players[playerId].character || "spectating"}
-              {game.players[playerId].ready ? " and ready" : " and not ready"}
-            </p>
-          ))}
-          <div>
-            <h2>Choose character</h2>
+
+          <h2>Choose character</h2>
+          <div className="chooseCharacter">
             {characters.map((character) => (
-              <button
+              <CharacterButton
                 key={character}
+                name={character}
                 onClick={() => {
                   chooseCharacter({ character });
                 }}
-                disabled={character in game.characters}
-              >
-                {character}
-              </button>
+                taken={
+                  game.characters[character] === undefined
+                    ? undefined
+                    : game.players[game.characters[character]!].name
+                }
+                ready={
+                  game.characters[character] === undefined
+                    ? false
+                    : game.players[game.characters[character]!].ready
+                }
+                chosen={game.characters[character] === me}
+              />
             ))}
+          </div>
+          <div>
             <button
               onClick={() => {
                 chooseSpectate();
@@ -104,8 +109,6 @@ const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
             >
               Spectate
             </button>
-          </div>
-          <div>
             <button
               onClick={() => {
                 toggleReady();
@@ -167,23 +170,21 @@ const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
             {me === game.state.playerOrder[game.state.turn] &&
             game.state.turnState.activity === "answering question" ? (
               <ChoiceCard
-                color="#fff"
+                color={colorOfTile(
+                  game.state.board[game.state.players[me].currentTile]
+                ).toCSS(true)}
                 title={
-                  (game.state.turnState as AnsweringQuestionTurnState).question
-                    .questionText
+                  (game.state.turnState as AnsweringQuestionTurnState)
+                    .questionPrompt.questionText
                 }
                 description="Choose the best answer."
-                choices={[
-                  (game.state.turnState as AnsweringQuestionTurnState).question
-                    .correct,
-                  ...((game.state.turnState as AnsweringQuestionTurnState)
-                    .question as MultipleChoiceQuestion).wrong,
-                ]
-                  .sort(() => 0.5 - Math.random())
-                  .map((answer) => ({
+                choices={(game.state!
+                  .turnState as AnsweringQuestionTurnState).questionPrompt.choices?.map(
+                  (answer) => ({
                     name: answer,
                     onClick: () => answerQuestion(answer),
-                  }))}
+                  })
+                )}
               />
             ) : null}
 
@@ -192,7 +193,9 @@ const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
             game.state.turnState.action !== "nothing" ? (
               game.state.turnState.action === "buy property" ? (
                 <ChoiceCard
-                  color="#0ff"
+                  color={colorOfTile(
+                    game.state.board[game.state.players[me].currentTile]
+                  ).toCSS(true)}
                   title={
                     game.state.board[
                       game.state.players[
@@ -216,7 +219,9 @@ const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
                 />
               ) : game.state.turnState.action === "buy utility" ? (
                 <ChoiceCard
-                  color="#0ff"
+                  color={colorOfTile(
+                    game.state.board[game.state.players[me].currentTile]
+                  ).toCSS(true)}
                   title={
                     game.state.board[
                       game.state.players[
@@ -239,12 +244,19 @@ const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
                   ]}
                 />
               ) : game.state.turnState.action === "chance" ? (
-                <Card color="#0ff" title="CAS">
+                <Card
+                  color={colorOfTile(
+                    game.state.board[game.state.players[me].currentTile]
+                  ).toCSS(true)}
+                  title="CAS"
+                >
                   <h2>Drawing a CAS card...</h2>
                 </Card>
               ) : game.state.turnState.action === "jail" ? (
                 <ChoiceCard
-                  color="#0ff"
+                  color={colorOfTile(
+                    game.state.board[game.state.players[me].currentTile]
+                  ).toCSS(true)}
                   title="EE"
                   description={`You landed on the EE tile, sentenced to six turns of EE labour. You can bail for ${
                     (actionData as ActionData["jail"]).fullBail
@@ -259,7 +271,9 @@ const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
                 />
               ) : game.state.turnState.action === "auction" ? (
                 <ChoiceCard
-                  color="#0ff"
+                  color={colorOfTile(
+                    game.state.board[game.state.players[me].currentTile]
+                  ).toCSS(true)}
                   title="TOK"
                   description={`You landed on the TOK tile. If you choose to trade properties with someone else, both parties receive a bounty of ${
                     (actionData as ActionData["auction"]).bounty
@@ -273,19 +287,19 @@ const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
             ) : null}
           </div>
           <div className="rightGameScreen">
+            <div>
+              <h1>Players</h1>
+              {game.state.playerOrder.map((playerId) => {
+                return (
+                  <PlayerTag
+                    player={game.players[playerId]}
+                    gamePlayer={game.state!.players[playerId]}
+                  />
+                );
+              })}
+            </div>
+            <div></div>
             <h1>Players</h1>
-            {game.state.playerOrder.map((playerId) => {
-              return (
-                <h1 key={playerId}>
-                  {`${game.players[playerId].name} is at tile 
-              ${game.state!.players[playerId].currentTile}: 
-              ${
-                game.state!.board[game.state!.players[playerId].currentTile]
-                  .name
-              }`}
-                </h1>
-              );
-            })}
           </div>
         </div>
       )}
