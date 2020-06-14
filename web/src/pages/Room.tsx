@@ -18,6 +18,7 @@ import {
   ValueOf,
   ActionData,
   AnsweringQuestionTurnState,
+  ActingTurnState,
 } from "../types";
 import { characters, colorOfTile } from "../constants";
 import Card, { ChoiceCard } from "../components/Card";
@@ -32,16 +33,13 @@ interface RoomPageParams {
 const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
   const roomId = match.params.roomId;
   const [game, setGame] = useState<Game | GameError>("loading");
-  const [actionData, setActionData] = useState<ValueOf<ActionData> | null>(
-    null
-  );
   const [me, setMe] = useState<string | null>(null);
 
   const [changingName, setChangingName] = useState<boolean>(false);
   const [nameInput, setNameInput] = useState<string>("");
 
   useEffect(() => {
-    subscribeToUpdates({ setGame, setActionData, setMe });
+    subscribeToUpdates({ setGame, setMe });
     joinRoom({ roomId });
   }, [roomId]);
 
@@ -211,7 +209,8 @@ const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
                       ].currentTile
                     ].name
                   } for ${
-                    (actionData as ActionData["buy property"]).buyPrice
+                    ((game.state.turnState as ActingTurnState)
+                      .actionData as ActionData["buy property"]).buyPrice
                   } C?`}
                   choices={[
                     { name: "Build", onClick: () => respond("accept") },
@@ -237,7 +236,8 @@ const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
                       ].currentTile
                     ].name
                   } for ${
-                    (actionData as ActionData["buy utility"]).buyPrice
+                    ((game.state.turnState as ActingTurnState)
+                      .actionData as ActionData["buy utility"]).buyPrice
                   } C?`}
                   choices={[
                     { name: "Purchase", onClick: () => respond("accept") },
@@ -260,9 +260,11 @@ const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
                   ).toCSS(true)}
                   title="EE"
                   description={`You landed on the EE tile, sentenced to six turns of EE labour. You can bail for ${
-                    (actionData as ActionData["jail"]).fullBail
+                    ((game.state.turnState as ActingTurnState)
+                      .actionData as ActionData["jail"]).fullBail
                   } C, or attend EE meetings for three turns and ${
-                    (actionData as ActionData["jail"]).halfBail
+                    ((game.state.turnState as ActingTurnState)
+                      .actionData as ActionData["jail"]).halfBail
                   } C.`}
                   choices={[
                     { name: "Bail out", onClick: () => respond("full") },
@@ -277,7 +279,8 @@ const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
                   ).toCSS(true)}
                   title="TOK"
                   description={`You landed on the TOK tile. If you choose to trade properties with someone else, both parties receive a bounty of ${
-                    (actionData as ActionData["auction"]).bounty
+                    ((game.state.turnState as ActingTurnState)
+                      .actionData as ActionData["auction"]).bounty
                   } C.`}
                   choices={[
                     { name: "Auction", onClick: () => respond("accept") },

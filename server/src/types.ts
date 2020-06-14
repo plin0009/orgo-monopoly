@@ -104,6 +104,7 @@ export interface MovingTurnState extends TurnState {
 export interface ActingTurnState extends TurnState {
   activity: "acting";
   action: Action;
+  actionData: ValueOf<ActionData>;
 }
 
 export interface ActionData {

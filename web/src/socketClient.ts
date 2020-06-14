@@ -27,14 +27,9 @@ export const socket = io(server);
 
 interface Updates {
   setGame: Dispatch<SetStateAction<Game | GameError>>;
-  setActionData: Dispatch<SetStateAction<ValueOf<ActionData> | null>>;
   setMe: Dispatch<SetStateAction<string | null>>;
 }
-export const subscribeToUpdates = ({
-  setGame,
-  setActionData,
-  setMe,
-}: Updates) => {
+export const subscribeToUpdates = ({ setGame, setMe }: Updates) => {
   console.log(`subscribing to updates`);
   if (socket.id !== undefined) {
     setMe(socket.id);
@@ -140,32 +135,8 @@ export const subscribeToUpdates = ({
     }
   );
 
-  socket.on("acting", (turnState: TurnState, data: ValueOf<ActionData>) => {
-    console.log(turnState);
-    console.log(data);
-    // make use of data depending on turnState.action
-    setActionData(() => data);
-    setGame((g) => update(g, { state: { turnState: { $set: turnState } } }));
-  });
-
-  socket.on("afterChance", (gamePlayers: Record<string, GamePlayer>) => {
-    setGame((g) => update(g, { state: { players: { $set: gamePlayers } } }));
-  });
-
-  socket.on("afterAction", (gamePlayers: Record<string, GamePlayer>) => {
-    setGame((g) => update(g, { state: { players: { $set: gamePlayers } } }));
-  });
-
-  socket.on("answeringQuestion", (turnState: TurnState) => {
-    setGame((g) => update(g, { state: { turnState: { $set: turnState } } }));
-  });
-
   socket.on("updateGameState", (gameState: GameState) => {
     setGame((g) => update(g, { state: { $set: gameState } }));
-  });
-
-  socket.on("updateTurnState", (turnState: TurnState) => {
-    setGame((g) => update(g, { state: { turnState: { $set: turnState } } }));
   });
 };
 

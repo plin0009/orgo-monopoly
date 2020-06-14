@@ -24,6 +24,7 @@ import {
   Deck,
   QuestionReference,
   StartOptions,
+  ActingTurnState,
 } from "./types";
 
 import { generateRoomId, generatePlayerName } from "./generator";
@@ -43,6 +44,8 @@ import {
   shuffle,
   getQuestionFromDeck,
   sets,
+  propertyRentValue,
+  propertySellValue,
 } from "./constants";
 
 const port = process.env.PORT || 8000;
@@ -309,7 +312,6 @@ io.on("connection", (socket) => {
     gameState.log.push(`${game.players[socket.id].name} is rolling the dice.`);
 
     io.in(currentRoomId!).emit("updateGameState", gameState);
-    // io.in(currentRoomId!).emit("updateTurnState", gameState.turnState); // newTurnState event instead?
   });
 
   const moving = () => {
@@ -372,50 +374,113 @@ io.on("connection", (socket) => {
     console.log(gameState.players[socket.id].currentTile);
     console.log("player landed on " + newTile.name);
 
+    let action = newTile.action;
     let data: ValueOf<ActionData> = null;
+    let timerFunction = failedToAct;
+    let timerMs = timers.acting;
+    let showTimer = true;
 
     switch (newTile.type) {
       case "property":
+        const pBuyPrice = propertyBuyPrice(newTile as Property);
+        const pRentValue = propertyRentValue(newTile as Property);
+        const pSellValue = propertySellValue(newTile as Property);
+
         data = {
-          buyPrice: propertyBuyPrice(newTile as Property),
+          buyPrice: pBuyPrice,
         };
+        if (pBuyPrice > gameState.players[socket.id].currency) {
+          // too broke
+          gameState.log.push(
+            `${
+              game.players[socket.id].name
+            } cannot afford to build a lab bench on ${newTile.name}.`
+          );
+          timerFunction = startTurn;
+          timerMs = timers.nothing;
+          showTimer = false;
+          action = "nothing";
+        } else if ((newTile as Property).ownerId !== undefined) {
+          // pay up
+          gameState.log.push(
+            `${game.players[socket.id].name} paid ${
+              game.players[(newTile as Property).ownerId!].name
+            } for using ${newTile.name}.`
+          );
+          timerFunction = startTurn;
+          timerMs = timers.nothing;
+          showTimer = false;
+          action = "nothing";
+        }
         break;
       case "utility":
-        data = { buyPrice: utilityBuyPrice() };
+        const uBuyPrice = utilityBuyPrice();
+        data = { buyPrice: uBuyPrice };
+        if (uBuyPrice > gameState.players[socket.id].currency) {
+          // too broke
+          gameState.log.push(
+            `${
+              game.players[socket.id].name
+            } cannot afford to take ownership of ${newTile.name}.`
+          );
+        } else if ((newTile as Utility).ownerId !== undefined) {
+          // pay up
+          gameState.log.push(
+            `${game.players[socket.id].name} paid ${
+              game.players[(newTile as Utility).ownerId!].name
+            } for using ${newTile.name}.`
+          );
+
+          timerFunction = startTurn;
+          timerMs = timers.nothing;
+          showTimer = false;
+          action = "nothing";
+        }
         break;
       case "jail":
         data = { fullBail: currencies.fullBail, halfBail: currencies.halfBail };
+        gameState.log.push(
+          `${game.players[socket.id].name} landed in EE trouble!`
+        );
         break;
       case "auction":
         data = { bounty: currencies.auctionBounty };
+        gameState.log.push(
+          `${
+            game.players[socket.id].name
+          } is evaluating the implications of trading their property.`
+        );
         break;
       case "chance":
-        game.state!.turnState = {
-          activity: "acting",
-          action: newTile.action,
-          timer: setAndStoreTimeout(spinForChance, timers.nothing),
-          showTimer: false,
-        };
+        timerFunction = spinForChance;
+        timerMs = timers.chance;
+        showTimer = false;
+        gameState.log.push(
+          `${game.players[socket.id].name} needs a new CAS experience!`
+        );
+        break;
       case "go":
-        game.state!.turnState = {
-          activity: "acting",
-          action: newTile.action,
-          timer: setAndStoreTimeout(startTurn, timers.nothing),
-          showTimer: false,
-        };
-        return;
+        timerFunction = startTurn;
+        timerMs = timers.nothing;
+        showTimer = false;
+        gameState.log.push(
+          `${game.players[socket.id].name} landed on the boring GO tile.`
+        );
+        break;
       default:
         return;
-      // return;
     }
 
-    game.state!.turnState = {
+    gameState.turnState = {
       activity: "acting",
-      action: newTile.action,
-      timer: setAndStoreTimeout(failedToAct, timers.acting),
-    };
+      action,
+      timer: setAndStoreTimeout(timerFunction, timerMs),
+      actionData: data,
+      showTimer,
+    } as ActingTurnState;
 
-    io.in(currentRoomId!).emit("acting", game.state!.turnState, data);
+    io.in(currentRoomId!).emit("updateGameState", gameState);
+    // io.in(currentRoomId!).emit("acting", game.state!.turnState, data);
   };
 
   socket.on("reaction", (reaction: ValueOf<Reaction>) => {
@@ -512,7 +577,7 @@ io.on("connection", (socket) => {
         gameState.players[socket.id].currency -= total;
         break;
     }
-    io.in(currentRoomId!).emit("afterAction", gameState.players);
+    io.in(currentRoomId!).emit("updateGameState", gameState);
   };
 
   const jail = (turnsJailed: number, currencyLost: number) => {
@@ -522,7 +587,7 @@ io.on("connection", (socket) => {
     gameState.players[socket.id].currency -= currencyLost;
     gameState.players[socket.id].jailed += turnsJailed;
 
-    io.in(currentRoomId!).emit("afterAction", gameState.players);
+    io.in(currentRoomId!).emit("updateGameState", gameState);
   };
 
   const askQuestion = (
@@ -573,7 +638,6 @@ io.on("connection", (socket) => {
       `${game.players[socket.id].name} is answering a question.`
     );
     io.in(currentRoomId!).emit("updateGameState", gameState);
-    // io.in(currentRoomId!).emit("updateTurnState", gameState.turnState);
   };
 
   const askPropertyQuestion = () => {
@@ -646,7 +710,7 @@ io.on("connection", (socket) => {
             game.players[socket.id].name
           } answered the question correctly, and took ownership of ${
             currentTile.name
-          }`
+          }.`
         );
         gameState.turnState = {
           activity: "finishing turn",
@@ -669,9 +733,7 @@ io.on("connection", (socket) => {
             game.players[socket.id].name
           } answered the question correctly, and can now listen to trade offers.`
         );
-        return io
-          .in(currentRoomId!)
-          .emit("updateTurnState", gameState.turnState);
+        return io.in(currentRoomId!).emit("updateGameState", gameState);
       }
     } else {
       gameState.log.push(
@@ -681,20 +743,18 @@ io.on("connection", (socket) => {
     }
   });
 
-  /*
-   *socket.on("disconnect", () => {
-   *  console.log(`disconnected from room ${currentRoomId}`);
-   *  if (currentRoomId !== null) {
-   *    delete games[currentRoomId].players[socket.id];
-   *    socket.to(currentRoomId).emit("removePlayer", socket.id);
-   *    if (Object.keys(games[currentRoomId].players).length === 0) {
-   *      // todo: add cooldown before closing room
-   *      console.log(`closing room ${currentRoomId}`);
-   *      delete games[currentRoomId];
-   *    }
-   *  }
-   *});
-   */
+  socket.on("disconnect", () => {
+    console.log(`disconnected from room ${currentRoomId}`);
+    if (currentRoomId !== null) {
+      delete games[currentRoomId].players[socket.id];
+      socket.to(currentRoomId).emit("removePlayer", socket.id);
+      if (Object.keys(games[currentRoomId].players).length === 0) {
+        // todo: add cooldown before closing room
+        console.log(`closing room ${currentRoomId}`);
+        delete games[currentRoomId];
+      }
+    }
+  });
 });
 
 server.listen(port, () => {
