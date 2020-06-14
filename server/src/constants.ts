@@ -217,7 +217,7 @@ export const propertyQuestions: QuestionCollection[] = [
     multipleChoiceQuestion(
       "Which of the following homologus series cannot have a molecular formula containing only two carbon atoms?",
       "ketone",
-      ["aldehyde", "carboxylic acid, ester"]
+      ["aldehyde", "carboxylic acid", "ester"]
     ),
     multipleChoiceQuestion(
       "What is the parent chain suffix for the halogeno group?",
@@ -316,8 +316,8 @@ export const propertyQuestions: QuestionCollection[] = [
   ],
 
   [
-    multipleChoiceQuestion("Monomers need to have unsaturation.", "True", [
-      "False",
+    multipleChoiceQuestion("Monomers need to have unsaturation.", "true", [
+      "false",
     ]),
     multipleChoiceQuestion(
       "Which conditions does addition polymerization not require?",
@@ -331,8 +331,8 @@ export const propertyQuestions: QuestionCollection[] = [
     ),
     multipleChoiceQuestion(
       "Which term describes the position of tails?",
-      "Tacticity",
-      ["Tailicity", "syndiocity", "stereoisomerism"]
+      "tacticity",
+      ["tailicity", "syndiocity", "stereoisomerism"]
     ),
   ],
 
