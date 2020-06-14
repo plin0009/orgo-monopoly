@@ -21,7 +21,7 @@ import update from "immutability-helper";
 
 const server =
   process.env.NODE_ENV === "production"
-    ? "https://orgo-monopoly-server.herokuapp.com/"
+    ? "https://orgo-monopoly-server.herokuapp.com"
     : "http://localhost:8000";
 export const socket = io(server);
 
