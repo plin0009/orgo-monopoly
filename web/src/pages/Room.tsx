@@ -29,7 +29,12 @@ import {
   SellingTurnState,
 } from "../types";
 import { characters, colorOfTile } from "../constants";
-import Card, { ChoiceCard, UpgradeCard, SellCard } from "../components/Card";
+import Card, {
+  ChoiceCard,
+  UpgradeCard,
+  SellCard,
+  InputCard,
+} from "../components/Card";
 import Board from "../components/Board";
 import PlayerTag from "../components/PlayerTag";
 import CharacterButton from "../components/CharacterButton";
@@ -221,23 +226,52 @@ const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
             </div>
             {me === game.state.playerOrder[game.state.turn] &&
             game.state.turnState.activity === "answering question" ? (
-              <ChoiceCard
-                color={colorOfTile(
-                  game.state.board[game.state.players[me].currentTile]
-                ).toCSS(true)}
-                title={
-                  (game.state.turnState as AnsweringQuestionTurnState)
-                    .questionPrompt.questionText
-                }
-                description="Choose the best answer."
-                choices={(game.state!
-                  .turnState as AnsweringQuestionTurnState).questionPrompt.choices?.map(
-                  (answer) => ({
-                    name: answer,
-                    onClick: () => answerQuestion(answer),
-                  })
-                )}
-              />
+              (game.state.turnState as AnsweringQuestionTurnState)
+                .questionPrompt.questionType === "multiple choice" ? (
+                <ChoiceCard
+                  color={colorOfTile(
+                    game.state.board[game.state.players[me].currentTile]
+                  ).toCSS(true)}
+                  title={
+                    (game.state.turnState as AnsweringQuestionTurnState)
+                      .questionPrompt.questionText
+                  }
+                  description="Choose the best answer."
+                  image={
+                    (game.state.turnState as AnsweringQuestionTurnState)
+                      .questionPrompt.questionImage
+                      ? "/assets/questions/" +
+                        (game.state.turnState as AnsweringQuestionTurnState)
+                      : undefined
+                  }
+                  choices={(game.state!
+                    .turnState as AnsweringQuestionTurnState).questionPrompt.choices?.map(
+                    (answer) => ({
+                      name: answer,
+                      onClick: () => answerQuestion(answer),
+                    })
+                  )}
+                />
+              ) : (
+                <InputCard
+                  color={colorOfTile(
+                    game.state.board[game.state.players[me].currentTile]
+                  ).toCSS(true)}
+                  title={
+                    (game.state.turnState as AnsweringQuestionTurnState)
+                      .questionPrompt.questionText
+                  }
+                  description="Type in your answer."
+                  image={
+                    (game.state.turnState as AnsweringQuestionTurnState)
+                      .questionPrompt.questionImage
+                      ? "/assets/questions/" +
+                        (game.state.turnState as AnsweringQuestionTurnState)
+                      : undefined
+                  }
+                  onSubmit={answerQuestion}
+                />
+              )
             ) : null}
             {me === game.state.playerOrder[game.state.turn] &&
             game.state.turnState.action !== undefined &&

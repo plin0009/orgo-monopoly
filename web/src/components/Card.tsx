@@ -1,5 +1,5 @@
-import React from "react";
-import { UpgradeData, SellData } from "../types";
+import React, { useState } from "react";
+import { UpgradeData, SellData, Answer } from "../types";
 import { propertyColors } from "../constants";
 
 interface CardProps {
@@ -20,6 +20,7 @@ const Card: React.FC<CardProps> = ({ color, title, children }) => {
 
 interface ChoiceCardProps extends CardProps {
   description: string;
+  image?: string;
   choices?: { name: string; onClick: () => void }[];
 }
 
@@ -27,16 +28,47 @@ export const ChoiceCard: React.FC<ChoiceCardProps> = ({
   color,
   title,
   description,
+  image,
   choices,
 }) => {
   return (
     <Card {...{ color, title }}>
       <h2>{description}</h2>
+      {image !== undefined ? <img src={image} alt="loading" /> : null}
       {choices?.map(({ name, onClick }) => (
         <button key={name} onClick={onClick}>
           {name}
         </button>
       ))}
+    </Card>
+  );
+};
+
+interface InputCardProps extends CardProps {
+  description: string;
+  image?: string;
+  onSubmit: (answer: Answer) => void;
+}
+
+export const InputCard: React.FC<InputCardProps> = ({
+  color,
+  title,
+  description,
+  image,
+  onSubmit,
+}) => {
+  const [textInput, setTextInput] = useState<string>("");
+  return (
+    <Card {...{ color, title }}>
+      <h2>{description}</h2>
+      {image !== undefined ? <img src={image} alt="loading" /> : null}
+      <input
+        type="text"
+        value={textInput}
+        onChange={(e) => setTextInput(e.target.value)}
+        placeholder="Your answer here"
+      />
+      <button onClick={() => onSubmit(textInput)}>Submit</button>
     </Card>
   );
 };
