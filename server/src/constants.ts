@@ -669,7 +669,8 @@ export const propertyQuestions: QuestionCollection[] = [
     multipleChoiceQuestion(
       "Which of the three molecules is/are achiral?",
       "I and II",
-      ["I only", "II only", "II and III"]
+      ["I only", "II only", "II and III"],
+      "image27.png"
     ),
     multipleChoiceQuestion(
       "How many chiral atoms does the following molecule have?",
