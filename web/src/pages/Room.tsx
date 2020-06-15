@@ -242,6 +242,7 @@ const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
                       .questionPrompt.questionImage
                       ? "/assets/questions/" +
                         (game.state.turnState as AnsweringQuestionTurnState)
+                          .questionPrompt.questionImage
                       : undefined
                   }
                   choices={(game.state!
@@ -267,6 +268,7 @@ const RoomPage = ({ match }: RouteComponentProps<RoomPageParams>) => {
                       .questionPrompt.questionImage
                       ? "/assets/questions/" +
                         (game.state.turnState as AnsweringQuestionTurnState)
+                          .questionPrompt.questionImage
                       : undefined
                   }
                   onSubmit={answerQuestion}
